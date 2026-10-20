@@ -1,0 +1,316 @@
+use anyhow::{Result, anyhow, Context};
+use blake3;
+use ciborium::{from_reader, into_writer};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::io::Cursor;
+
+
+const YZ_MAGIC: &[u8] = b"YZ01";
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct YzFileEntry {
+    
+    pub path: String,
+    
+    pub offset: u64,
+    
+    pub size: u64,
+    
+    pub hash: String,
+}
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct YzHeader {
+    
+    pub version: u8,
+    
+    pub name: String,
+    
+    pub package_version: String,
+    
+    pub files: Vec<YzFileEntry>,
+    
+    pub signature: Option<Vec<u8>>,
+}
+
+
+#[derive(Debug, Clone)]
+pub struct YzPackage {
+    pub header: YzHeader,
+    pub files: HashMap<String, Vec<u8>>,
+}
+
+impl YzPackage {
+    
+    pub fn new(name: &str, version: &str) -> Self {
+        YzPackage {
+            header: YzHeader {
+                version: 1,
+                name: name.to_string(),
+                package_version: version.to_string(),
+                files: Vec::new(),
+                signature: None,
+            },
+            files: HashMap::new(),
+        }
+    }
+
+    
+    pub fn add_file(&mut self, path: &str, content: Vec<u8>) -> Result<()> {
+        
+        let hash = blake3::hash(&content);
+        
+        
+        let offset: u64 = self.files.values().map(|v| v.len() as u64).sum();
+        
+        
+        let entry = YzFileEntry {
+            path: path.to_string(),
+            offset,
+            size: content.len() as u64,
+            hash: hash.to_hex().to_string(),
+        };
+
+        self.header.files.push(entry);
+        self.files.insert(path.to_string(), content);
+
+        Ok(())
+    }
+
+    
+    pub fn get_file(&self, path: &str) -> Option<&Vec<u8>> {
+        self.files.get(path)
+    }
+
+    
+    pub fn verify_integrity(&self) -> Result<()> {
+        for entry in &self.header.files {
+            if let Some(content) = self.files.get(&entry.path) {
+                
+                if content.len() as u64 != entry.size {
+                    return Err(anyhow!(
+                        "Size mismatch for {}: expected {}, got {}",
+                        entry.path,
+                        entry.size,
+                        content.len()
+                    ));
+                }
+
+                
+                let hash = blake3::hash(content);
+                if hash.to_hex().to_string() != entry.hash {
+                    return Err(anyhow!(
+                        "Hash mismatch for {}",
+                        entry.path
+                    ));
+                }
+            } else {
+                return Err(anyhow!("Missing file: {}", entry.path));
+            }
+        }
+
+        Ok(())
+    }
+
+    
+    pub fn validate_extension(&self) -> Result<()> {
+        let required = ["charter.kdl", "about.kdl", "src/main.wasm"];
+        
+        for file in required {
+            if !self.files.contains_key(file) {
+                return Err(anyhow!("Missing required file: {}", file));
+            }
+        }
+
+        Ok(())
+    }
+
+    
+    pub fn to_bytes(&self) -> Result<Vec<u8>> {
+        let mut buffer = Vec::new();
+
+        
+        buffer.extend_from_slice(YZ_MAGIC);
+
+        
+        let mut header_buffer = Vec::new();
+        into_writer(&self.header, &mut header_buffer)
+            .context("Failed to serialize header")?;
+
+        
+        let header_len = header_buffer.len() as u32;
+        buffer.extend_from_slice(&header_len.to_le_bytes());
+
+        
+        buffer.extend_from_slice(&header_buffer);
+
+        
+        for entry in &self.header.files {
+            if let Some(content) = self.files.get(&entry.path) {
+                buffer.extend_from_slice(content);
+            }
+        }
+
+        
+        buffer.extend_from_slice(YZ_MAGIC);
+
+        Ok(buffer)
+    }
+
+    
+    pub fn from_bytes(data: &[u8]) -> Result<Self> {
+        if data.len() < 12 {
+            return Err(anyhow!("Data too short for YZ package"));
+        }
+
+        
+        if &data[0..4] != YZ_MAGIC {
+            return Err(anyhow!("Invalid magic bytes at start"));
+        }
+
+        
+        if &data[data.len() - 4..] != YZ_MAGIC {
+            return Err(anyhow!("Invalid magic bytes at end"));
+        }
+
+        
+        let header_len = u32::from_le_bytes([data[4], data[5], data[6], data[7]]) as usize;
+
+        
+        let header_start = 8;
+        let header_end = header_start + header_len;
+        
+        if header_end > data.len() - 4 {
+            return Err(anyhow!("Header extends beyond data"));
+        }
+
+        let header: YzHeader = from_reader(&mut Cursor::new(&data[header_start..header_end]))
+            .context("Failed to parse header")?;
+
+        
+        let mut files = HashMap::new();
+        let data_start = header_end;
+        let data_end = data.len() - 4;
+
+        for entry in &header.files {
+            let start = data_start + entry.offset as usize;
+            let end = start + entry.size as usize;
+
+            if end > data_end {
+                return Err(anyhow!("File {} extends beyond data", entry.path));
+            }
+
+            files.insert(entry.path.clone(), data[start..end].to_vec());
+        }
+
+        Ok(YzPackage { header, files })
+    }
+}
+
+
+pub fn parse_yz(data: &[u8]) -> Result<YzPackage> {
+    YzPackage::from_bytes(data)
+}
+
+
+pub fn write_yz(pkg: &YzPackage) -> Result<Vec<u8>> {
+    pkg.to_bytes()
+}
+
+
+pub fn verify_yz_integrity(pkg: &YzPackage) -> bool {
+    pkg.verify_integrity().is_ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_package() -> YzPackage {
+        let mut pkg = YzPackage::new("test-extension", "1.0.0");
+        
+        
+        pkg.add_file("charter.kdl", b"permission(\"storage\")".to_vec()).unwrap();
+        pkg.add_file("about.kdl", b"name(\"Test\")".to_vec()).unwrap();
+        pkg.add_file("src/main.wasm", b"\x00asm\x01\x00\x00\x00".to_vec()).unwrap();
+        
+        pkg
+    }
+
+    #[test]
+    fn test_create_package() {
+        let pkg = create_test_package();
+        
+        assert_eq!(pkg.header.name, "test-extension");
+        assert_eq!(pkg.header.version, 1);
+        assert_eq!(pkg.files.len(), 3);
+    }
+
+    #[test]
+    fn test_validate_extension() {
+        let pkg = create_test_package();
+        assert!(pkg.validate_extension().is_ok());
+    }
+
+    #[test]
+    fn test_verify_integrity() {
+        let pkg = create_test_package();
+        assert!(pkg.verify_integrity().is_ok());
+    }
+
+    #[test]
+    fn test_serialize_deserialize() {
+        let pkg = create_test_package();
+        
+        let bytes = pkg.to_bytes().expect("Failed to serialize");
+        let parsed = YzPackage::from_bytes(&bytes).expect("Failed to deserialize");
+        
+        assert_eq!(parsed.header.name, pkg.header.name);
+        assert_eq!(parsed.files.len(), pkg.files.len());
+        
+        
+        for (path, content) in &pkg.files {
+            assert_eq!(parsed.files.get(path), Some(content));
+        }
+    }
+
+    #[test]
+    fn test_invalid_magic() {
+        let invalid_data = b"INVALID DATA";
+        assert!(YzPackage::from_bytes(invalid_data).is_err());
+    }
+
+    #[test]
+    fn test_missing_required_file() {
+        let mut pkg = YzPackage::new("incomplete", "1.0.0");
+        pkg.add_file("charter.kdl", b"test".to_vec()).unwrap();
+        
+        assert!(pkg.validate_extension().is_err());
+    }
+
+    #[test]
+    fn test_hash_verification() {
+        let mut pkg = YzPackage::new("test", "1.0.0");
+        let content = b"test content".to_vec();
+        pkg.add_file("test.txt", content.clone()).unwrap();
+        
+        
+        let entry = &pkg.header.files[0];
+        let expected_hash = blake3::hash(&content);
+        assert_eq!(entry.hash, expected_hash.to_hex().to_string());
+    }
+
+    #[test]
+    fn test_roundtrip() {
+        let original = create_test_package();
+        
+        let bytes = write_yz(&original).unwrap();
+        let parsed = parse_yz(&bytes).unwrap();
+        
+        assert!(verify_yz_integrity(&parsed));
+        assert!(parsed.validate_extension().is_ok());
+    }
+}
