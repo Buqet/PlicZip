@@ -12,12 +12,12 @@
 
 | | Язык | Language | Документация |
 |---|---|---|---|
-| 🇷🇺 | **[Русский](RU-README.md)** | Russian | Полная документация |
-| 🇬🇧 | **[English](EN-README.md)** | English | Full documentation |
-| 🇪🇸 | **[Español](ES-README.md)** | Spanish | Documentación completa |
-| 🇩🇪 | **[Deutsch](DE-README.md)** | German | Vollständige Dokumentation |
-| 🇫🇷 | **[Français](FR-README.md)** | French | Documentation complète |
-| 🇨🇳 | **[中文](ZH-README.md)** | Chinese | 完整文档 |
+| 🇷🇺 | **[Русский](gitlocales/RU-README.md)** | Russian | Полная документация |
+| 🇬🇧 | **[English](gitlocales/EN-README.md)** | English | Full documentation |
+| 🇪🇸 | **[Español](gitlocales/ES-README.md)** | Spanish | Documentación completa |
+| 🇩🇪 | **[Deutsch](gitlocales/DE-README.md)** | German | Vollständige Dokumentation |
+| 🇫🇷 | **[Français](gitlocales/FR-README.md)** | French | Documentation complète |
+| 🇨🇳 | **[中文](gitlocales/ZH-README.md)** | Chinese | 完整文档 |
 
 ---
 
