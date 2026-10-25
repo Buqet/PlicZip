@@ -43,7 +43,11 @@ impl EtaEstimator {
 
     /// Отмечает новое значение счётчика.
     pub fn sample(&mut self, done: u64) {
-        let now = Instant::now();
+        self.sample_at(Instant::now(), done);
+    }
+
+    /// То же, что [`Self::sample`], но с явным моментом времени (для тестов).
+    fn sample_at(&mut self, now: Instant, done: u64) {
         self.samples.push_back((now, done));
         while let Some(&(t, _)) = self.samples.front() {
             if now.duration_since(t) > Self::WINDOW {
@@ -403,20 +407,28 @@ mod tests {
 
     #[test]
     fn eta_counts_recent_speed_not_average() {
+        // Время задаём явно: тест не зависит от точности sleep на CI.
         let mut est = EtaEstimator::new();
-        // 20 замеров по 20 мс: примерно 50 МБ/с.
+        let t0 = Instant::now();
+        // Медленное начало: 1 МБ за первые 10 секунд — оно должно выпасть из окна.
+        est.sample_at(t0, 0);
+        est.sample_at(t0 + Duration::from_secs(10), 1_000_000);
+        // Потом 20 замеров по 20 мс: ровно 50 МБ/с.
+        let base = t0 + Duration::from_secs(10);
         for i in 1..=20u64 {
-            std::thread::sleep(Duration::from_millis(20));
-            est.sample(i * 1_000_000);
+            est.sample_at(
+                base + Duration::from_millis(20 * i),
+                1_000_000 + i * 1_000_000,
+            );
         }
         let speed = est.speed().expect("скорость должна посчитаться");
         assert!(
-            speed > 30_000_000.0 && speed < 70_000_000.0,
-            "скорость {speed} вне правдоподобного диапазона"
+            (speed - 50_000_000.0).abs() < 1.0,
+            "скорость {speed}, ожидалось 50 МБ/с по окну, а не среднее с начала"
         );
-        // Осталось 20 МБ при ~50 МБ/с — меньше секунды.
-        let eta = est.eta(20_000_000, 40_000_000).expect("остаток");
-        assert!(eta.as_secs_f64() < 1.0, "остаток {eta:?} слишком велик");
+        // Осталось 20 МБ при 50 МБ/с — 0.4 секунды.
+        let eta = est.eta(21_000_000, 41_000_000).expect("остаток");
+        assert!((eta.as_secs_f64() - 0.4).abs() < 1e-6, "остаток {eta:?}");
     }
 
     #[test]
