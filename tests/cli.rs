@@ -402,3 +402,66 @@ fn json_listing_is_json() {
 
     let _ = fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn recovery_record_roundtrip_and_damage_report() {
+    let dir = workdir("recovery");
+    let src = make_tree(&dir);
+    // Плохо сжимаемый файл, чтобы данные архива занимали заметную часть.
+    let mut state = 0x9e37_79b9_7f4a_7c15u64;
+    let noise: Vec<u8> = (0..60_000)
+        .map(|_| {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state as u8
+        })
+        .collect();
+    fs::write(src.join("шум.bin"), noise).unwrap();
+    let archive = dir.join("rr.plz");
+    let stamp = archive.to_string_lossy().into_owned();
+    let src_stamp = src.to_string_lossy().into_owned();
+
+    let (ok, _, err) = run(&["a", &stamp, &src_stamp, "--recovery", "10%", "-q"]);
+    assert!(ok, "создание с --recovery не удалось: {}", err);
+
+    let (ok, out, err) = run(&["i", &stamp, "--json"]);
+    assert!(ok, "{}", err);
+    let info: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(info["recovery"]["percent"], 10);
+    assert!(info["recovery"]["parity_shards"].as_u64().unwrap() >= 1);
+
+    let (ok, out, err) = run(&["t", &stamp, "--json"]);
+    assert!(ok, "{} {}", out, err);
+    let report: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(report["recovery"]["ok"], true);
+
+    let out_dir = dir.join("out");
+    let out_stamp = out_dir.to_string_lossy().into_owned();
+    let (ok, _, err) = run(&["x", &stamp, "-o", &out_stamp, "-q"]);
+    assert!(ok, "{}", err);
+    assert_eq!(
+        fs::read(out_dir.join("данные/текст.txt")).unwrap(),
+        fs::read(src.join("текст.txt")).unwrap()
+    );
+
+    // Портим байт внутри архива: t сообщает повреждённый кусок и возвращает 1.
+    let mut bytes = fs::read(&archive).unwrap();
+    bytes[20_000] ^= 0xff;
+    fs::write(&archive, &bytes).unwrap();
+    let (ok, out, err) = run(&["t", &stamp, "--json"]);
+    assert!(!ok);
+    let report: serde_json::Value =
+        serde_json::from_str(&out).unwrap_or_else(|_| panic!("{} {}", out, err));
+    let shard = info["recovery"]["shard_size"].as_u64().unwrap();
+    assert_eq!(
+        report["recovery"]["bad_data"],
+        serde_json::json!([20_000 / shard])
+    );
+    assert_eq!(report["recovery"]["recoverable"], true);
+
+    let (ok, _, err) = run(&["a", &stamp, &src_stamp, "--recovery", "0"]);
+    assert!(!ok);
+    assert!(err.contains("от 1% до 100%"), "{}", err);
+    let _ = fs::remove_dir_all(&dir);
+}

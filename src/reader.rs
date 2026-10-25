@@ -131,6 +131,8 @@ pub struct Archive {
     pub index_start: u64,
     /// Раскладка контейнера (шифрование, начало данных).
     pub layout: Layout,
+    /// Запись для восстановления, если она есть.
+    pub recovery: Option<crate::recovery::Trailer>,
     key: Option<Zeroizing<[u8; 32]>>,
 }
 
@@ -142,7 +144,8 @@ impl Archive {
 
     /// Открывает архив, беря пароль из аргумента или спрашивая его.
     pub fn open_with(path: &Path, password: Option<&str>) -> Result<Self> {
-        let (src, sources) = source::open(path)?;
+        let (raw, sources) = source::open_raw(path)?;
+        let (src, recovery) = crate::recovery::protect(raw)?;
         let layout = format::inspect(src.as_ref())?;
 
         let key = if layout.encrypted {
@@ -169,6 +172,7 @@ impl Archive {
             index: parsed.index,
             index_start: parsed.index_start,
             layout: parsed.layout,
+            recovery,
             key,
         })
     }
@@ -181,6 +185,23 @@ impl Archive {
     /// Зашифрован ли архив.
     pub fn is_encrypted(&self) -> bool {
         self.layout.encrypted
+    }
+
+    /// Длина самого архива без записи для восстановления.
+    pub fn data_len(&self) -> u64 {
+        self.src.len()
+    }
+
+    /// Проверяет запись для восстановления; `None`, если её нет.
+    pub fn verify_recovery(
+        &self,
+        show_progress: bool,
+    ) -> Result<Option<crate::recovery::VerifyReport>> {
+        let Some(trailer) = &self.recovery else {
+            return Ok(None);
+        };
+        let (raw, _) = source::open_raw(&self.path)?;
+        crate::recovery::verify(raw.as_ref(), trailer, show_progress, None).map(Some)
     }
 
     /// Все файлы, из которых состоит архив (для многотомного — все тома).
