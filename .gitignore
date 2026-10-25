@@ -1,0 +1,12 @@
+# Сборка
+/target
+Cargo.lock.orig
+
+# Тестовые каталоги и замеры
+/target/test-tmp
+/target/bench
+
+# ОС
+Thumbs.db
+desktop.ini
+.DS_Store
