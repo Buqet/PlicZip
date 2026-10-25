@@ -252,7 +252,7 @@ impl Sink {
     }
 
     fn io_error(err: anyhow::Error) -> io::Error {
-        io::Error::new(io::ErrorKind::Other, err.to_string())
+        io::Error::other(err.to_string())
     }
 }
 
@@ -294,7 +294,7 @@ impl Write for Sink {
             let file = self
                 .file
                 .as_mut()
-                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "том не открыт"))?;
+                .ok_or_else(|| io::Error::other("том не открыт"))?;
             let written = file.write(&data[..take])?;
             self.pos += written as u64;
             self.in_volume += written as u64;
@@ -303,7 +303,7 @@ impl Write for Sink {
             let file = self
                 .file
                 .as_mut()
-                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "файл не открыт"))?;
+                .ok_or_else(|| io::Error::other("файл не открыт"))?;
             let written = file.write(data)?;
             self.pos += written as u64;
             Ok(written)
@@ -323,7 +323,7 @@ fn mode_of(meta: &fs::Metadata) -> u32 {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
-        (meta.mode() & 0o7777) as u32
+        meta.mode() & 0o7777
     }
     #[cfg(not(unix))]
     {

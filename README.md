@@ -31,7 +31,7 @@ $ pliczip t backup.plz
 $ pliczip x backup.plz -o ./восстановлено
 ```
 
-> Полная документация — в файлах по ссылкам выше. Начните с [Русский](https://ru-readme.md/) или [English](https://en-readme.md/).
+> Полная документация — в файлах по ссылкам выше. Начните с [Русский](gitlocales/RU-README.md) или [English](gitlocales/EN-README.md).
 
 ---
 

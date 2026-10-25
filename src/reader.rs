@@ -160,7 +160,7 @@ impl Archive {
             None
         };
 
-        let parsed = format::read_index(src.as_ref(), &layout, key.as_ref().map(|value| &**value))?;
+        let parsed = format::read_index(src.as_ref(), &layout, key.as_deref())?;
 
         Ok(Archive {
             path: path.to_path_buf(),
@@ -386,6 +386,14 @@ impl Archive {
         }
 
         // Проход 4: символические ссылки.
+        let archive_links: std::collections::HashMap<String, String> = self
+            .index
+            .entries
+            .iter()
+            .filter(|e| e.kind == Kind::Symlink)
+            .map(|e| (e.path.to_lowercase(), e.link.clone()))
+            .collect();
+        let mut created_links: Vec<(PathBuf, String)> = Vec::new();
         for entry in &self.index.entries {
             if entry.kind != Kind::Symlink {
                 continue;
@@ -394,7 +402,9 @@ impl Archive {
                 stats.skipped += 1;
                 continue;
             }
-            if let Err(err) = safety::validate_link_target(&entry.path, &entry.link) {
+            if let Err(err) = safety::validate_link_target(&entry.path, &entry.link)
+                .and_then(|_| safety::validate_link_chain(&entry.path, &entry.link, &archive_links))
+            {
                 eprintln!("  ! ссылка {} пропущена: {}", entry.path, err);
                 stats.skipped += 1;
                 continue;
@@ -405,13 +415,37 @@ impl Archive {
             }
             let _ = fs::remove_file(safety::native_path(&target));
             match create_symlink(&entry.link, &target) {
-                Ok(()) => stats.links += 1,
+                Ok(()) => {
+                    stats.links += 1;
+                    created_links.push((target, entry.path.clone()));
+                }
                 Err(err) => {
                     eprintln!(
                         "  ! ссылка {} -> {} не создана: {}",
                         entry.path, entry.link, err
                     );
                     stats.skipped += 1;
+                }
+            }
+        }
+
+        // Защита в глубину: ссылка могла пройти проверки, но указать наружу
+        // через ссылку, которая уже лежала в каталоге распаковки до нас.
+        // Проверяем реальное разрешение после создания всех ссылок.
+        if !created_links.is_empty() {
+            if let Ok(root) = fs::canonicalize(&dest) {
+                for (link, rel) in &created_links {
+                    if let Ok(resolved) = fs::canonicalize(safety::native_path(link)) {
+                        if !resolved.starts_with(&root) {
+                            eprintln!(
+                                "  ! ссылка {} указывает за пределы распаковки и удалена",
+                                rel
+                            );
+                            let _ = fs::remove_file(safety::native_path(link));
+                            stats.links -= 1;
+                            stats.skipped += 1;
+                        }
+                    }
                 }
             }
         }
@@ -674,7 +708,7 @@ mod tests {
             show_progress: false,
             ..Default::default()
         };
-        writer::create(&archive, &[src.clone()], &opts).unwrap();
+        writer::create(&archive, std::slice::from_ref(&src), &opts).unwrap();
 
         let out = dir.join("out");
         let mut ar = Archive::open(&archive).unwrap();
@@ -727,7 +761,7 @@ mod tests {
         let archive = dir.join("a.plz");
         writer::create(
             &archive,
-            &[src.clone()],
+            std::slice::from_ref(&src),
             &CreateOptions {
                 show_progress: false,
                 password: Some(Zeroizing::new("секрет".to_string())),
@@ -802,7 +836,7 @@ mod tests {
         let archive = dir.join("a.plz");
         writer::create(
             &archive,
-            &[src.clone()],
+            std::slice::from_ref(&src),
             &CreateOptions {
                 show_progress: false,
                 level: 0,

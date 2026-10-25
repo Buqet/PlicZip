@@ -291,3 +291,46 @@ fn symlink_escaping_is_skipped_not_fatal() {
 
     let _ = fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn symlink_chain_escaping_is_skipped() {
+    // `a/l1 -> ..` и `l3 -> a/l1/..` поодиночке безопасны, но вместе `l3`
+    // указывает на каталог выше корня распаковки.
+    let dir = workdir("symlink-chain");
+    let mut l1 = file_entry("a/l1");
+    l1.kind = Kind::Symlink;
+    l1.size = 0;
+    l1.block = None;
+    l1.link = "..".to_string();
+    let mut l3 = l1.clone();
+    l3.path = "l3".to_string();
+    l3.link = "a/l1/..".to_string();
+    let file = file_entry("ok.txt");
+
+    let idx = index(vec![l1, l3, file], vec![block()]);
+    let path = write_archive(&dir, "chain.plz", &craft(&idx));
+
+    let mut archive = Archive::open(&path).expect("архив должен открываться");
+    let out = dir.join("out");
+    let stats = archive
+        .extract(&pliczip::reader::ExtractOptions {
+            output: out.clone(),
+            show_progress: false,
+            ..Default::default()
+        })
+        .expect("распаковка не должна падать");
+    assert_eq!(stats.files, 1);
+    // На Windows без прав на ссылки a/l1 тоже может не создаться — это не ошибка.
+    #[cfg(unix)]
+    {
+        assert_eq!(stats.links, 1, "безопасная a/l1 должна создаться");
+        assert_eq!(stats.skipped, 1, "цепочка наружу должна быть пропущена");
+    }
+    assert!(stats.skipped >= 1, "цепочка наружу должна быть пропущена");
+    assert!(
+        fs::symlink_metadata(out.join("l3")).is_err(),
+        "ссылка l3 наружу создана!"
+    );
+
+    let _ = fs::remove_dir_all(&dir);
+}
