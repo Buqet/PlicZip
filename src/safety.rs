@@ -9,6 +9,7 @@
 //! при открытии (чтобы не распаковать мусор, даже если файл пришёл извне).
 
 use anyhow::{bail, ensure, Context, Result};
+use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 
 /// Максимальная длина пути внутри архива.
@@ -192,6 +193,71 @@ pub fn validate_link_target(entry_path: &str, target: &str) -> Result<()> {
     Ok(())
 }
 
+/// Сколько ссылок подряд можно пройти при разрешении цели (как `MAXSYMLINKS`).
+pub const MAX_LINK_HOPS: usize = 40;
+
+/// Проверяет, что ссылка не выводит за пределы распаковки с учётом **других
+/// ссылок из того же архива**.
+///
+/// [`validate_link_target`] смотрит на каждую ссылку по отдельности и не видит
+/// цепочек: `a/l1 -> ..` и `l3 -> a/l1/..` поодиночке безопасны, но вместе `l3`
+/// указывает на каталог выше корня распаковки. Здесь цель разрешается так же,
+/// как это сделает ОС: если промежуточный сегмент сам является ссылкой из
+/// архива, путь продолжается от её цели.
+///
+/// `links` — все ссылки архива: путь элемента в нижнем регистре → цель.
+pub fn validate_link_chain(
+    entry_path: &str,
+    target: &str,
+    links: &HashMap<String, String>,
+) -> Result<()> {
+    let mut stack: Vec<&str> = entry_path.split('/').filter(|s| !s.is_empty()).collect();
+    stack.pop(); // сама ссылка; разрешаем от её каталога
+    let mut pending: Vec<&str> = target.split(['/', '\\']).rev().collect();
+    let mut hops = 0usize;
+
+    while let Some(segment) = pending.pop() {
+        match segment {
+            "" | "." => {}
+            ".." => {
+                if stack.pop().is_none() {
+                    bail!(
+                        "цепочка ссылок выводит за пределы распаковки: {:?} -> {:?}",
+                        entry_path,
+                        target
+                    );
+                }
+            }
+            name => {
+                stack.push(name);
+                let current = stack.join("/").to_lowercase();
+                if let Some(next) = links.get(&current) {
+                    hops += 1;
+                    ensure!(
+                        hops <= MAX_LINK_HOPS,
+                        "слишком длинная или зацикленная цепочка ссылок: {:?}",
+                        entry_path
+                    );
+                    let bytes = next.as_bytes();
+                    if next.starts_with('/')
+                        || next.starts_with('\\')
+                        || (bytes.len() >= 2 && bytes[1] == b':' && bytes[0].is_ascii_alphabetic())
+                    {
+                        bail!(
+                            "цепочка ссылок ведёт к абсолютному пути: {:?} -> {:?}",
+                            entry_path,
+                            next
+                        );
+                    }
+                    stack.pop();
+                    pending.extend(next.split(['/', '\\']).rev());
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Вычисляет глубину пути в архиве (число сегментов).
 pub fn path_depth(rel: &str) -> usize {
     rel.split('/').filter(|s| !s.is_empty()).count()
@@ -294,5 +360,29 @@ mod tests {
         assert!(validate_link_target("link", "../file.txt").is_err());
         assert!(validate_link_target("dir/link", "/etc/passwd").is_err());
         assert!(validate_link_target("dir/link", "C:\\Windows").is_err());
+    }
+
+    #[test]
+    fn link_chains() {
+        let links: HashMap<String, String> = [
+            ("a/l1".to_string(), "..".to_string()),
+            ("l3".to_string(), "a/l1/..".to_string()),
+            ("loop1".to_string(), "loop2".to_string()),
+            ("loop2".to_string(), "loop1".to_string()),
+            ("d/abs".to_string(), "/etc".to_string()),
+            ("docs".to_string(), "a".to_string()),
+        ]
+        .into_iter()
+        .collect();
+        // Поодиночке обе ссылки проходят старую проверку...
+        assert!(validate_link_target("a/l1", "..").is_ok());
+        assert!(validate_link_target("l3", "a/l1/..").is_ok());
+        // ...но цепочка выводит наружу.
+        assert!(validate_link_chain("a/l1", "..", &links).is_ok());
+        assert!(validate_link_chain("l3", "a/l1/..", &links).is_err());
+        assert!(validate_link_chain("loop1", "loop2", &links).is_err());
+        assert!(validate_link_chain("x", "d/abs/passwd", &links).is_err());
+        assert!(validate_link_chain("y", "docs/file.txt", &links).is_ok());
+        assert!(validate_link_chain("A/L1", "..", &links).is_ok());
     }
 }
