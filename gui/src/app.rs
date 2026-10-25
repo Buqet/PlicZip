@@ -32,6 +32,100 @@ pub struct Loaded {
     pub filter: String,
 
     pub selected: Option<usize>,
+    /// Порядок строк таблицы с учётом фильтра и сортировки.
+    pub view: Vec<usize>,
+    /// Ключ, по которому построен `view`: пересчёт только при изменении.
+    view_key: Option<(String, Sort, bool)>,
+}
+
+/// Колонка, по которой отсортирована таблица.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Sort {
+    Path,
+    Size,
+    Packed,
+    Ratio,
+    Method,
+    Date,
+}
+
+/// Всплывающее уведомление в углу окна.
+pub struct Toast {
+    pub text: String,
+    pub ok: bool,
+    pub at: Instant,
+}
+
+/// Сжатый размер элемента: в обычном режиме точный, в solid — доля блока,
+/// пропорциональная размеру файла (иначе сумма по файлам не сойдётся с блоком).
+pub fn packed_size(index: &PzIndex, entry: &PzEntry) -> Option<u64> {
+    if entry.kind == Kind::Dir {
+        return None;
+    }
+    let block = entry.block.and_then(|b| index.blocks.get(b as usize))?;
+    if block.size == 0 {
+        return None;
+    }
+    Some(
+        (block.stored_size as u128 * entry.size as u128 / block.size as u128)
+            .min(u64::MAX as u128) as u64,
+    )
+}
+
+/// Доля сэкономленного места у элемента (0..1); `None` — нет данных.
+pub fn saved_fraction(index: &PzIndex, entry: &PzEntry) -> Option<f32> {
+    let packed = packed_size(index, entry)?;
+    if entry.size == 0 {
+        return None;
+    }
+    Some((1.0 - packed as f64 / entry.size as f64).clamp(0.0, 1.0) as f32)
+}
+
+impl Loaded {
+    /// Пересчитывает порядок строк, если фильтр или сортировка изменились.
+    pub fn ensure_view(&mut self, sort: Sort, desc: bool) {
+        let key = (self.filter.to_lowercase(), sort, desc);
+        if self.view_key.as_ref() == Some(&key) {
+            return;
+        }
+        let index = &self.meta.index;
+        let filter = &key.0;
+        let mut view: Vec<usize> = index
+            .entries
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| filter.is_empty() || e.path.to_lowercase().contains(filter.as_str()))
+            .map(|(i, _)| i)
+            .collect();
+        let method = |e: &PzEntry| {
+            e.block
+                .and_then(|b| index.blocks.get(b as usize))
+                .map(|b| b.method.name())
+                .unwrap_or("")
+        };
+        match sort {
+            Sort::Path => view.sort_by(|&a, &b| index.entries[a].path.cmp(&index.entries[b].path)),
+            Sort::Size => view.sort_by_key(|&i| index.entries[i].size),
+            Sort::Packed => view.sort_by_key(|&i| packed_size(index, &index.entries[i]).unwrap_or(0)),
+            Sort::Ratio => view.sort_by(|&a, &b| {
+                let fa = saved_fraction(index, &index.entries[a]).unwrap_or(-1.0);
+                let fb = saved_fraction(index, &index.entries[b]).unwrap_or(-1.0);
+                fa.total_cmp(&fb)
+            }),
+            Sort::Method => view.sort_by(|&a, &b| method(&index.entries[a]).cmp(method(&index.entries[b]))),
+            Sort::Date => view.sort_by_key(|&i| index.entries[i].mtime),
+        }
+        if desc {
+            view.reverse();
+        }
+        self.view = view;
+        self.view_key = Some(key);
+    }
+
+    /// Плоский ли список: при фильтре или сортировке не по пути дерево не строится.
+    pub fn is_flat(&self, sort: Sort) -> bool {
+        !self.filter.is_empty() || sort != Sort::Path
+    }
 }
 
 pub struct CreateDlg {
@@ -89,6 +183,11 @@ pub struct App {
     rx: Option<Receiver<Msg>>,
 
     pub last_action: Option<String>,
+    pub sort: Sort,
+    pub sort_desc: bool,
+    pub toast: Option<Toast>,
+    /// Поставить фокус в поле поиска на следующем кадре (Ctrl+F).
+    pub focus_search: bool,
 }
 
 impl App {
@@ -102,6 +201,10 @@ impl App {
             op: None,
             rx: None,
             last_action: None,
+            sort: Sort::Path,
+            sort_desc: false,
+            toast: None,
+            focus_search: false,
         };
         if let Some(path) = startup_archive {
             app.begin_open(path);
@@ -167,6 +270,8 @@ impl App {
                     integrity: Integrity::Untested,
                     filter: String::new(),
                     selected: None,
+                    view: Vec::new(),
+                    view_key: None,
                 });
                 self.modal = Modal::None;
                 self.last_action = None;
@@ -233,7 +338,7 @@ impl App {
         });
     }
 
-    pub fn spawn_create(&mut self, dlg: CreateDlg) -> Result<(), String> {
+    pub fn spawn_create(&mut self, dlg: &CreateDlg) -> Result<(), String> {
         let output = PathBuf::from(dlg.output.trim());
         if output.as_os_str().is_empty() {
             return Err("укажи, куда сохранить архив".into());
@@ -316,15 +421,76 @@ impl App {
         }
     }
 
+    /// Показывает уведомление в углу окна.
+    pub fn notify(&mut self, text: impl Into<String>, ok: bool) {
+        self.toast = Some(Toast {
+            text: text.into(),
+            ok,
+            at: Instant::now(),
+        });
+    }
+
+    /// Открывает диалог распаковки для текущего архива.
+    pub fn open_extract_dialog(&mut self) {
+        if self.op.is_some() {
+            return;
+        }
+        if let Some(loaded) = &self.loaded {
+            let dir = default_extract_dir(&loaded.path);
+            self.modal = Modal::Extract(ExtractDlg {
+                output: dir.to_string_lossy().into_owned(),
+                error: None,
+            });
+        }
+    }
+
+    /// Открывает архив через системный диалог.
+    pub fn pick_and_open(&mut self) {
+        if self.op.is_some() {
+            return;
+        }
+        let picked = rfd::FileDialog::new()
+            .add_filter("Архивы PlicZip", &["plz"])
+            .set_title("Открыть архив")
+            .pick_file();
+        if let Some(path) = picked {
+            self.begin_open(path);
+        }
+    }
+
+    /// Горячие клавиши главного окна.
+    fn shortcuts(&mut self, ctx: &egui::Context) {
+        use egui::{Key, KeyboardShortcut, Modifiers};
+        if self.modal_kind() != ModalKind::None || self.op.is_some() {
+            return;
+        }
+        let pressed = |key| ctx.input_mut(|i| i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, key)));
+        if pressed(Key::O) {
+            self.pick_and_open();
+        } else if pressed(Key::N) {
+            self.modal = Modal::Create(CreateDlg::from_sources(Vec::new()));
+        } else if pressed(Key::E) {
+            self.open_extract_dialog();
+        } else if pressed(Key::T) {
+            if self.loaded.is_some() {
+                self.spawn_test();
+            }
+        } else if pressed(Key::F) {
+            self.focus_search = true;
+        }
+    }
+
     fn finish_op(&mut self, done: Done) {
         match done {
             Done::Extract { stats } => match stats {
                 Ok(stats) => {
-                    self.last_action = Some(format!(
+                    let text = format!(
                         "распаковано: {} · {}",
                         plural_ru(stats.files, "файл", "файла", "файлов"),
                         pliczip::util::human_bytes(stats.bytes)
-                    ));
+                    );
+                    self.notify(text.clone(), true);
+                    self.last_action = Some(text);
                 }
                 Err(err) => {
                     self.modal = Modal::Error {
@@ -340,10 +506,12 @@ impl App {
                     if let Some(loaded) = &mut self.loaded {
                         loaded.integrity = Integrity::Verified(Instant::now());
                     }
-                    self.last_action = Some(format!(
+                    let text = format!(
                         "целостность подтверждена · {}",
                         plural_ru(report.files, "файл", "файла", "файлов")
-                    ));
+                    );
+                    self.notify(text.clone(), true);
+                    self.last_action = Some(text);
                 }
                 Err(err) => {
                     if let Some(loaded) = &mut self.loaded {
@@ -360,14 +528,16 @@ impl App {
             },
             Done::Create { path, stats } => match stats {
                 Ok(stats) => {
-                    self.last_action = Some(format!(
+                    let text = format!(
                         "создан {} · {}",
                         path.file_name()
                             .map(|n| n.to_string_lossy().into_owned())
                             .unwrap_or_default(),
                         pliczip::util::human_bytes(stats.archive_bytes)
-                    ));
+                    );
+                    self.notify(text.clone(), true);
                     self.begin_open(path);
+                    self.last_action = Some(text);
                 }
                 Err(err) => {
                     self.modal = Modal::Error {
@@ -424,15 +594,24 @@ impl eframe::App for App {
         } else {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title("PlicZip".into()));
         }
+        self.shortcuts(&ctx);
         let busy = self.op.is_some();
+        if let Some(loaded) = &mut self.loaded {
+            loaded.ensure_view(self.sort, self.sort_desc);
+        }
 
         views::menu_bar(self, ui);
         views::toolbar(self, ui, busy);
         views::status_bar(self, ui);
-        views::side_panel(self, ui, p);
+        if self.loaded.is_some() {
+            views::archive_header(self, ui, p);
+            views::side_panel(self, ui, p);
+        }
         views::central(self, ui, p, busy);
 
         dialogs::draw(self, &ctx, p);
+        views::drop_overlay(&ctx, p);
+        views::toast(self, &ctx, p);
     }
 }
 
@@ -469,6 +648,18 @@ fn archive_encrypted(path: &Path) -> anyhow::Result<bool> {
     let (src, _) = source::open(path)?;
     let layout = format::inspect(src.as_ref())?;
     Ok(layout.encrypted)
+}
+
+/// Каталог распаковки по умолчанию: рядом с архивом, его же именем.
+pub fn default_extract_dir(archive: &Path) -> PathBuf {
+    let stem = archive
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "распаковано".into());
+    archive
+        .parent()
+        .map(|d| d.join(stem.clone()))
+        .unwrap_or_else(|| PathBuf::from(stem))
 }
 
 pub fn is_plz(path: &Path) -> bool {

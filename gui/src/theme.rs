@@ -86,24 +86,18 @@ impl Palette {
         }
     }
 
+    /// Цвет текста и иконок поверх акцентной заливки.
+    pub fn on_accent(self) -> Color32 {
+        if self.dark {
+            Color32::from_rgb(0x16, 0x18, 0x1C)
+        } else {
+            Color32::from_rgb(0xFF, 0xFF, 0xFF)
+        }
+    }
+
     /// Полупрозрачный акцент под выделение строки.
     pub fn accent_soft(self) -> Color32 {
         self.accent.gamma_multiply(if self.dark { 0.16 } else { 0.12 })
-    }
-
-    /// Полупрозрачный зелёный под плашку «подтверждено».
-    pub fn ok_soft(self) -> Color32 {
-        self.ok.gamma_multiply(if self.dark { 0.12 } else { 0.10 })
-    }
-
-    /// Полупрозрачный красный под плашку «повреждено».
-    pub fn err_soft(self) -> Color32 {
-        self.err.gamma_multiply(if self.dark { 0.12 } else { 0.09 })
-    }
-
-    /// Полупрозрачный серый под «не проверено».
-    pub fn neutral_soft(self) -> Color32 {
-        self.muted.gamma_multiply(if self.dark { 0.12 } else { 0.10 })
     }
 }
 
@@ -161,10 +155,24 @@ pub fn apply(ctx: &egui::Context, cfg: &Config) {
     visuals.widgets.hovered.weak_bg_fill = palette.panel2;
     visuals.widgets.active.bg_stroke = Stroke::new(1.0, palette.accent);
     visuals.widgets.active.weak_bg_fill = palette.accent_soft();
+    visuals.widgets.open.weak_bg_fill = palette.accent_soft();
+    let radius = egui::CornerRadius::same(7);
+    visuals.widgets.noninteractive.corner_radius = radius;
+    visuals.widgets.inactive.corner_radius = radius;
+    visuals.widgets.hovered.corner_radius = radius;
+    visuals.widgets.active.corner_radius = radius;
+    visuals.widgets.open.corner_radius = radius;
+    visuals.window_corner_radius = egui::CornerRadius::same(14);
+    visuals.menu_corner_radius = egui::CornerRadius::same(10);
+    visuals.window_fill = palette.panel;
+    visuals.window_stroke = Stroke::new(1.0, palette.line);
+    visuals.slider_trailing_fill = true;
     ctx.set_visuals(visuals);
 
     ctx.style_mut_of(theme, |style| {
         style.spacing.item_spacing = egui::vec2(8.0, 6.0);
+        style.spacing.button_padding = egui::vec2(10.0, 5.0);
+        style.spacing.interact_size.y = 26.0;
     });
 }
 
