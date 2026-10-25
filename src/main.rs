@@ -444,14 +444,13 @@ fn run(cli: Cli) -> Result<ExitCode> {
             println!();
             if long {
                 println!(
-                    "  {}  {}  {}  {}",
+                    "  {}  {}  {}  Путь",
                     pad_left("Размер", 10),
                     pad_right("Метод", 8),
-                    pad_right("Сжатие", 7),
-                    "Путь"
+                    pad_right("Сжатие", 7)
                 );
             } else {
-                println!("  {}  {}", pad_left("Размер", 10), "Путь");
+                println!("  {}  Путь", pad_left("Размер", 10));
             }
 
             for entry in ar.entries() {

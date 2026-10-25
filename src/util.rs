@@ -198,11 +198,11 @@ impl Progress {
 
     /// Строка прогресса: объём, процент, скорость и остаток.
     fn line(&self) -> String {
-        let percent = if self.total == 0 {
-            100
-        } else {
-            (self.done.saturating_mul(100) / self.total).min(100)
-        };
+        let percent = self
+            .done
+            .saturating_mul(100)
+            .checked_div(self.total)
+            .map_or(100, |p| p.min(100));
         let mut line = if self.total == 0 {
             format!("  {} {}", self.label, human_bytes(self.done))
         } else {

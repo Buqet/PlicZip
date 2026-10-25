@@ -63,11 +63,12 @@ pub fn brotli_quality(level: i32) -> i32 {
 }
 
 fn brotli_params(level: i32, size_hint: usize) -> brotli::enc::BrotliEncoderParams {
-    let mut params = brotli::enc::BrotliEncoderParams::default();
-    params.quality = brotli_quality(level);
-    params.lgwin = brotli_window(size_hint);
-    params.size_hint = size_hint;
-    params
+    brotli::enc::BrotliEncoderParams {
+        quality: brotli_quality(level),
+        lgwin: brotli_window(size_hint),
+        size_hint,
+        ..Default::default()
+    }
 }
 
 /// Сжимает буфер целиком (для блоков, которые помещаются в память).
