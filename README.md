@@ -26,6 +26,7 @@
 ```text
 $ pliczip a backup.plz ./документы -x9
 $ pliczip a секрет.plz ./документы --password=пароль --volume-size 700M
+$ pliczip a важное.plz ./документы --recovery 5%
 $ pliczip l backup.plz -l
 $ pliczip t backup.plz
 $ pliczip x backup.plz -o ./восстановлено

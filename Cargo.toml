@@ -6,7 +6,7 @@ resolver = "2"
 name = "pliczip"
 version = "0.2.0"
 edition = "2021"
-rust-version = "1.74"
+rust-version = "1.82"
 description = "PlicZip — архиватор с собственным форматом .plz"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
@@ -34,6 +34,7 @@ chacha20poly1305 = "0.10"
 getrandom = "0.2"
 zeroize = "1"
 rpassword = "7"
+reed-solomon-simd = "3.1"
 
 [profile.release]
 lto = true

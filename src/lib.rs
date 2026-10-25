@@ -40,6 +40,7 @@ pub mod crypto;
 pub mod format;
 pub mod glob;
 pub mod reader;
+pub mod recovery;
 pub mod safety;
 pub mod source;
 pub mod util;

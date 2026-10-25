@@ -174,10 +174,18 @@ fn read_at(file: &File, buf: &mut [u8], offset: u64) -> io::Result<usize> {
     }
 }
 
-/// Открывает архив: либо набор томов, либо один файл.
+/// Открывает архив и прячет запись для восстановления, если она есть.
 ///
 /// Возвращает источник и список открытых файлов (для вывода и проверок).
 pub fn open(path: &Path) -> Result<(Box<dyn Source>, Vec<PathBuf>)> {
+    let (src, names) = open_raw(path)?;
+    let (src, _) = crate::recovery::protect(src)?;
+    Ok((src, names))
+}
+
+/// Открывает архив как есть: либо набор томов, либо один файл,
+/// вместе с записью для восстановления.
+pub fn open_raw(path: &Path) -> Result<(Box<dyn Source>, Vec<PathBuf>)> {
     // Пользователь мог указать прямо том: `backup.plz.001`.
     let base = strip_volume_suffix(path);
 

@@ -23,6 +23,7 @@ use crate::format::{
     FORMAT_VERSION, MAGIC, MAGIC_ENCRYPTED,
 };
 use crate::glob::Matcher;
+use crate::recovery;
 use crate::safety;
 use crate::util::{human_bytes, plural, Progress};
 
@@ -62,6 +63,8 @@ pub struct CreateOptions {
     pub exclude: Vec<String>,
     /// Получатель обновлений прогресса (GUI); `None` — только stderr.
     pub progress: Option<std::sync::Arc<dyn crate::util::ProgressSink>>,
+    /// Запись для восстановления: объём в процентах (1..=100), `None` — без неё.
+    pub recovery: Option<u32>,
 }
 
 impl Default for CreateOptions {
@@ -78,6 +81,7 @@ impl Default for CreateOptions {
             include: Vec::new(),
             exclude: Vec::new(),
             progress: None,
+            recovery: None,
         }
     }
 }
@@ -95,6 +99,7 @@ impl std::fmt::Debug for CreateOptions {
             .field("volume_size", &self.volume_size)
             .field("include", &self.include)
             .field("exclude", &self.exclude)
+            .field("recovery", &self.recovery)
             .finish_non_exhaustive()
     }
 }
@@ -120,6 +125,8 @@ pub struct CreateStats {
     pub volumes: usize,
     /// Зашифрован ли архив.
     pub encrypted: bool,
+    /// Сколько байт заняла запись для восстановления (0 — её нет).
+    pub recovery_bytes: u64,
 }
 
 /// Один элемент, найденный на диске.
@@ -220,8 +227,8 @@ impl Sink {
         self.planned.len()
     }
 
-    /// Дописывает всё и переименовывает временные файлы в целевые.
-    fn finish(mut self) -> Result<Vec<PathBuf>> {
+    /// Дописывает и сбрасывает на диск последний том, не переименовывая его.
+    fn seal(&mut self) -> Result<()> {
         if let Some(file) = self.file.take() {
             let file = file
                 .into_inner()
@@ -229,6 +236,17 @@ impl Sink {
             file.sync_all()
                 .context("не удалось сбросить архив на диск")?;
         }
+        Ok(())
+    }
+
+    /// Временные пути всех томов в порядке записи.
+    fn temp_paths(&self) -> Vec<PathBuf> {
+        self.planned.iter().map(|(temp, _)| temp.clone()).collect()
+    }
+
+    /// Дописывает всё и переименовывает временные файлы в целевые.
+    fn finish(mut self) -> Result<Vec<PathBuf>> {
+        self.seal()?;
 
         let mut finished = Vec::with_capacity(self.planned.len());
         for (temp, final_path) in std::mem::take(&mut self.planned) {
@@ -588,6 +606,19 @@ pub fn create(output: &Path, inputs: &[PathBuf], opts: &CreateOptions) -> Result
         compress::MAX_LEVEL
     );
 
+    if let Some(percent) = opts.recovery {
+        ensure!(
+            (recovery::MIN_PERCENT..=recovery::MAX_PERCENT).contains(&percent),
+            "объём записи для восстановления должен быть от {}% до {}%",
+            recovery::MIN_PERCENT,
+            recovery::MAX_PERCENT
+        );
+        ensure!(
+            opts.volume_size.is_none(),
+            "запись для восстановления пока не поддерживается для многотомных архивов"
+        );
+    }
+
     let matcher = Matcher::new(&opts.include, &opts.exclude);
     let candidates = collect(inputs, opts.follow_links, &matcher)?;
     ensure!(
@@ -870,6 +901,7 @@ pub fn create(output: &Path, inputs: &[PathBuf], opts: &CreateOptions) -> Result
                 archive_bytes: sink.pos(),
                 volumes: sink.volumes(),
                 encrypted,
+                recovery_bytes: 0,
             },
         ))
     })();
@@ -881,6 +913,30 @@ pub fn create(output: &Path, inputs: &[PathBuf], opts: &CreateOptions) -> Result
             return Err(err);
         }
     };
+
+    if let Some(percent) = opts.recovery {
+        let added = sink.seal().and_then(|()| {
+            let temps = sink.temp_paths();
+            ensure!(
+                temps.len() == 1,
+                "запись для восстановления пока поддерживается только для однофайловых архивов"
+            );
+            recovery::add_to_file(
+                &temps[0],
+                percent,
+                opts.show_progress,
+                opts.progress.as_ref(),
+            )
+            .context("не удалось построить запись для восстановления")
+        });
+        match added {
+            Ok(trailer) => stats.recovery_bytes = trailer.plan.section_len(),
+            Err(err) => {
+                sink.abort();
+                return Err(err);
+            }
+        }
+    }
 
     let created = sink.finish()?;
     stats.blocks = block_metas.len();

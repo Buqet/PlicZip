@@ -107,6 +107,10 @@ enum Cmd {
         #[arg(long = "volume-size", value_name = "РАЗМЕР", value_parser = parse_size)]
         volume_size: Option<u64>,
 
+        /// Добавить запись для восстановления объёмом ПРОЦЕНТ от архива (1..100).
+        #[arg(long, value_name = "ПРОЦЕНТ", value_parser = parse_percent)]
+        recovery: Option<u32>,
+
         /// Включить только эти маски (можно повторять).
         #[arg(long, value_name = "МАСКА")]
         include: Vec<String>,
@@ -261,6 +265,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             password,
             password_file,
             volume_size,
+            recovery,
             include,
             exclude,
             json,
@@ -281,6 +286,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 include,
                 exclude,
                 progress: None,
+                recovery,
             };
             let stats = writer::create(&archive, &inputs, &opts)?;
 
@@ -297,6 +303,8 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     "archive_bytes": stats.archive_bytes,
                     "volumes": stats.volumes,
                     "encrypted": stats.encrypted,
+                    "recovery_percent": recovery,
+                    "recovery_bytes": stats.recovery_bytes,
                     "seconds": started.elapsed().as_secs_f64(),
                 });
                 println!("{}", serde_json::to_string_pretty(&document)?);
@@ -327,6 +335,13 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     },
                     if encrypted { " · зашифрован" } else { "" }
                 );
+                if let Some(percent) = recovery {
+                    println!(
+                        "  восстановление: {}% ({})",
+                        percent,
+                        human_bytes(stats.recovery_bytes)
+                    );
+                }
                 println!("  время:     {}", human_duration(started.elapsed()));
                 if encrypted {
                     println!();
@@ -478,14 +493,23 @@ fn run(cli: Cli) -> Result<ExitCode> {
             let started = Instant::now();
             let secret = password_for_open(password.as_deref(), password_file.as_deref())?;
             let mut ar = Archive::open_with(&archive, secret.as_deref().map(String::as_str))?;
+            let rr_report = ar.verify_recovery(!quiet && !json)?;
+            let rr_clean = rr_report.as_ref().is_none_or(|report| report.is_clean());
+            if !json {
+                if let Some(report) = &rr_report {
+                    print_recovery_report(report, quiet);
+                }
+            }
+            let rr_json = rr_report.as_ref().map(recovery_report_json);
             match ar.test(!quiet && !json, max_ratio, None) {
                 Ok(report) => {
                     if json {
                         let document = serde_json::json!({
-                            "ok": true,
+                            "ok": rr_clean,
                             "blocks": report.blocks,
                             "files": report.files,
                             "bytes": report.bytes,
+                            "recovery": rr_json,
                         });
                         println!("{}", serde_json::to_string_pretty(&document)?);
                     } else if !quiet {
@@ -496,13 +520,23 @@ fn run(cli: Cli) -> Result<ExitCode> {
                             human_duration(started.elapsed())
                         );
                     }
-                    Ok(ExitCode::SUCCESS)
+                    if rr_clean {
+                        Ok(ExitCode::SUCCESS)
+                    } else {
+                        if !json {
+                            eprintln!(
+                                "pliczip: данные архива целы, но повреждена запись для восстановления"
+                            );
+                        }
+                        Ok(ExitCode::from(1))
+                    }
                 }
                 Err(err) => {
                     if json {
                         let document = serde_json::json!({
                             "ok": false,
                             "error": format!("{:#}", err),
+                            "recovery": rr_json,
                         });
                         println!("{}", serde_json::to_string_pretty(&document)?);
                     } else {
@@ -531,7 +565,8 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 .filter_map(|path| std::fs::metadata(path).ok())
                 .map(|meta| meta.len())
                 .sum();
-            let index_len = file_size
+            let index_len = ar
+                .data_len()
                 .saturating_sub(ar.index_start)
                 .saturating_sub(pliczip::format::FOOTER_LEN);
 
@@ -553,6 +588,17 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     "stored_bytes": stored,
                     "archive_bytes": file_size,
                     "index_bytes": index_len,
+                    "recovery": ar.recovery.as_ref().map(|trailer| serde_json::json!({
+                        "version": pliczip::recovery::VERSION,
+                        "percent": trailer.plan.percent,
+                        "shard_size": trailer.plan.shard_size,
+                        "data_shards": trailer.plan.data_shards,
+                        "parity_shards": trailer.plan.parity_shards,
+                        "groups": trailer.plan.groups,
+                        "protected_bytes": trailer.plan.protected_len,
+                        "recovery_bytes": trailer.plan.section_len(),
+                        "merkle_root": hex(&trailer.merkle_root),
+                    })),
                 });
                 println!("{}", serde_json::to_string_pretty(&document)?);
                 return Ok(ExitCode::SUCCESS);
@@ -601,8 +647,101 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 human_bytes(index_len),
                 ar.index_start
             );
+            match &ar.recovery {
+                Some(trailer) => {
+                    let plan = &trailer.plan;
+                    println!(
+                        "Восстановление: {}% ({}): {} данных + {} parity по {}, {}",
+                        plan.percent,
+                        human_bytes(plan.section_len()),
+                        plural(plan.data_shards as usize, "кусок", "куска", "кусков"),
+                        plan.parity_shards,
+                        human_bytes(plan.shard_size),
+                        plural(plan.groups as usize, "группа", "группы", "групп")
+                    );
+                    println!("Корень Меркла: {}", hex(&trailer.merkle_root));
+                }
+                None => println!("Восстановление: нет"),
+            }
             Ok(ExitCode::SUCCESS)
         }
+    }
+}
+
+/// Разбирает объём записи для восстановления: `5` или `5%`.
+fn parse_percent(text: &str) -> Result<u32, String> {
+    let digits = text.trim().trim_end_matches('%').trim();
+    let value: u32 = digits
+        .parse()
+        .map_err(|_| format!("ожидалось целое число процентов, получено {:?}", text))?;
+    let range = pliczip::recovery::MIN_PERCENT..=pliczip::recovery::MAX_PERCENT;
+    if !range.contains(&value) {
+        return Err(format!(
+            "объём должен быть от {}% до {}%",
+            range.start(),
+            range.end()
+        ));
+    }
+    Ok(value)
+}
+
+fn recovery_report_json(report: &pliczip::recovery::VerifyReport) -> serde_json::Value {
+    serde_json::json!({
+        "ok": report.is_clean(),
+        "data_shards": report.data_shards,
+        "parity_shards": report.parity_shards,
+        "bad_data": report.bad_data,
+        "bad_parity": report.bad_parity,
+        "table_ok": report.table_ok,
+        "trailer_copy_ok": report.trailer_copy_ok,
+        "trailer_end_ok": report.trailer_end_ok,
+        "recoverable": report.recoverable(),
+    })
+}
+
+fn print_recovery_report(report: &pliczip::recovery::VerifyReport, quiet: bool) {
+    if report.is_clean() {
+        if !quiet {
+            println!(
+                "  запись для восстановления цела: {} данных и {} parity",
+                plural(report.data_shards as usize, "кусок", "куска", "кусков"),
+                report.parity_shards
+            );
+        }
+        return;
+    }
+    eprintln!(
+        "pliczip: запись для восстановления: повреждено кусков данных — {}, parity — {}",
+        report.bad_data.len(),
+        report.bad_parity.len()
+    );
+    if !report.table_ok {
+        eprintln!("  таблица хешей не сходится с корнем Меркла");
+    }
+    if !report.trailer_copy_ok || !report.trailer_end_ok {
+        eprintln!("  один из трейлеров повреждён (используется уцелевший)");
+    }
+    let shown: Vec<String> = report
+        .bad_data
+        .iter()
+        .take(10)
+        .map(u64::to_string)
+        .collect();
+    if !shown.is_empty() {
+        eprintln!(
+            "  повреждённые куски данных: {}{}",
+            shown.join(", "),
+            if report.bad_data.len() > shown.len() {
+                ", …"
+            } else {
+                ""
+            }
+        );
+    }
+    if report.recoverable() {
+        eprintln!("  parity хватает, чтобы восстановить архив (команда восстановления — в следующей версии)");
+    } else {
+        eprintln!("  parity не хватает, чтобы восстановить все повреждённые куски");
     }
 }
 
