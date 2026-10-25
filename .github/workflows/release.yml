@@ -1,0 +1,108 @@
+name: Release
+
+# Собирает бинарники CLI и GUI под Linux, Windows и macOS и прикладывает их
+# к GitHub Release. Запускается на пуш тега `v*` (например `v0.10.111-beta`);
+# если релиза для тега ещё нет — создаёт его (теги с `-` — пре-релиз).
+# Вручную (Actions → Release → Run workflow) можно доложить бинарники
+# в уже существующий релиз.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Тег релиза, например v0.10.111-beta"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Релиз
+    runs-on: ubuntu-latest
+    steps:
+      - name: Создать релиз, если его нет
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Релиз $TAG уже есть — только доложим бинарники."
+          else
+            flags=(--generate-notes --verify-tag --title "$TAG")
+            case "$TAG" in *-*) flags+=(--prerelease) ;; esac
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" "${flags[@]}"
+          fi
+
+  build:
+    name: Сборка (${{ matrix.target }})
+    needs: release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc }
+          - { os: macos-latest, target: aarch64-apple-darwin }
+          - { os: macos-latest, target: x86_64-apple-darwin }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Системные зависимости (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev \
+            libxcb-xfixes0-dev libxkbcommon-dev libgtk-3-dev
+
+      - name: Сборка
+        run: cargo build --release --locked --target ${{ matrix.target }} -p pliczip -p pliczip-gui
+
+      - name: Упаковка
+        shell: bash
+        run: |
+          name="pliczip-${TAG}-${{ matrix.target }}"
+          bin="target/${{ matrix.target }}/release"
+          ext=""
+          [ "$RUNNER_OS" = "Windows" ] && ext=".exe"
+          mkdir "$name"
+          cp "$bin/pliczip$ext" "$bin/pliczip-gui$ext" README.md LICENSE "$name/"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            asset="$name.zip"
+            7z a -bd "$asset" "$name" >/dev/null
+          else
+            asset="$name.tar.gz"
+            tar czf "$asset" "$name"
+          fi
+          if command -v sha256sum >/dev/null; then
+            sha256sum "$asset" > "$asset.sha256"
+          else
+            shasum -a 256 "$asset" > "$asset.sha256"
+          fi
+          echo "ASSET=$asset" >> "$GITHUB_ENV"
+
+      - name: Загрузка в релиз
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" "$ASSET" "$ASSET.sha256" --clobber -R "$GITHUB_REPOSITORY"
