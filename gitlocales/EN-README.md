@@ -185,7 +185,33 @@ computed over the last seconds, not averaged from the start;
 - **settings** — theme (dark/light) and accent (brass/steel/green)
 saved to `%APPDATA%/pliczip/config.json`.
 
-Not yet done: modifying an existing archive (the "Modify" button), associating `.plz` with Explorer, and a context menu — that's the next block.
+Not yet done: modifying an existing archive (the "Modify" button).
+
+### Explorer context menu (Windows)
+
+Enable it in the GUI: **File → Add to Explorer context menu** (click again to remove). For installers, the same without a window:
+
+```text
+pliczip-gui --register-shell     # add; exit code 1 means an error
+pliczip-gui --unregister-shell   # remove
+```
+
+A **PlicZip** submenu appears:
+
+| Where | Item | What it does |
+|---|---|---|
+| `.plz` archive | double click / "Open in PlicZip" | opens the archive window |
+| `.plz` archive | Extract here | into the archive's folder |
+| `.plz` archive | Extract to a folder named after the archive | `backup.plz` → `backup\` |
+| `.plz` archive | Test integrity | full check, badge in the window |
+| files and folders | Add to archive… | create dialog with the selected items |
+| files and folders | Compress to .plz | immediately, default settings, next to the source; an existing name is never overwritten — `name (2).plz` |
+
+Encrypted archives ask for the password first. With several items selected, Explorer starts one process per item; they agree through a temp folder and a single window opens with the full list.
+
+Everything is written to `HKCU\Software\Classes` — no admin rights, other users are not affected; removal deletes only PlicZip's own keys. On Windows 11 the items live under "Show more options" (Shift+F10); the top-level modern menu needs an `IExplorerCommand` COM handler and an MSIX package — that's the next step.
+
+(Menu captions are currently in Russian, like the rest of the GUI.)
 
 ## Integrity
 
@@ -282,7 +308,7 @@ hashes for it already exist;
 - **non-UTF-8 names** — a path that can't be represented as UTF-8 isn't archived;
 - **archive modification** — files can't be added to or removed from a
 finished archive (the "Modify" button in the GUI is empty for now);
-- **Explorer integration** — `.plz` association and context menu are not there yet;
+- **Linux/macOS file manager integration** — the context menu is Windows Explorer only, and on Windows 11 only in the classic menu;
 - **archive digital signature**;
 - **name-only encryption** without encrypting data — deliberately not done: it
 creates a false sense of protection.
@@ -325,7 +351,7 @@ Memory is bounded: blocks up to 32 MiB are assembled in memory and compressed in
 ## Development
 
 ```
-cargo test --workspace   # 104 tests: unit, CLI, security, GUI, doc-test
+cargo test --workspace   # unit, CLI, security, GUI, doc-test
 cargo build --release
 ```
 

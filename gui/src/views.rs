@@ -48,6 +48,18 @@ pub fn menu_bar(app: &mut App, ui: &mut egui::Ui) {
                         app.loaded = None;
                         app.last_action = None;
                     }
+                    if crate::shell::SUPPORTED {
+                        ui.separator();
+                        let label = match crate::shell::status() {
+                            crate::shell::Status::On => "Убрать из контекстного меню Проводника",
+                            crate::shell::Status::Off => "Встроить в контекстное меню Проводника",
+                            crate::shell::Status::OtherCopy(_) => "Привязать контекстное меню к этой копии",
+                        };
+                        if ui.add_enabled(!busy, egui::Button::new(label)).clicked() {
+                            ui.close();
+                            app.toggle_shell_integration();
+                        }
+                    }
                     ui.separator();
                     if ui.button("Выход").clicked() {
                         ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);

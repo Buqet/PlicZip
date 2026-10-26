@@ -26,3 +26,13 @@ jobs:
         run: cargo clippy -p pliczip --all-targets -- -D warnings
       - name: Тесты
         run: cargo test -p pliczip
+      - name: Системные зависимости GUI (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev \
+            libxcb-xfixes0-dev libxkbcommon-dev libgtk-3-dev libwayland-dev
+      - name: Clippy GUI
+        run: cargo clippy -p pliczip-gui --all-targets -- -D warnings
+      - name: Тесты GUI
+        run: cargo test -p pliczip-gui
