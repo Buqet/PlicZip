@@ -36,5 +36,5 @@ $ pliczip x backup.plz -o ./восстановлено
 
 ---
 
-**Лицензия:** MIT OR Apache-2.0
+**Лицензия:** [MIT](LICENSE-MIT) OR [Apache-2.0](LICENSE-APACHE)
 

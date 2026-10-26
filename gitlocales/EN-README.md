@@ -53,13 +53,12 @@ A directory is stored under its own name: `a x.plz photos` produces `photos/...`
 
 ### Compression levels
 
-| Level ↕▾ | Method ↕▾ | When to use ↕▾ |
+| Level | Method | When to use |
 |---|---|---|
-| −`-x0` | no compression | already compressed (video, jpg, other archives) |
-| −`-x1..4` | deflate | fast, moderate |
+| `-x0` | no compression | already compressed (video, jpg, other archives) |
+| `-x1..4` | deflate | fast, moderate |
 | `-x5` (default) | brotli q5 | reasonable balance |
 | `-x9..11` | brotli q9..q11 | slow, but text/code/logs compress noticeably better |
-⚙
 
 If compression doesn't shrink a block, it's stored as-is — the archive doesn't bloat.
 
@@ -211,17 +210,16 @@ Encrypted archives add an AEAD tag on every chunk, and block hashes are computed
 
 ## Extraction safety
 
-| Attack ↕▾ | Defense ↕▾ |
+| Attack | Defense |
 |---|---|
-| −`../../secret` (zip-slip) | path policy: `..`, `.`, and empty segments are forbidden in the format |
-| −absolute paths `/etc/…`, `C:\…` | forbidden at index validation |
+| `../../secret` (zip-slip) | path policy: `..`, `.`, and empty segments are forbidden in the format |
+| absolute paths `/etc/…`, `C:\…` | forbidden at index validation |
 | NTFS ADS (`file.txt:hidden`) | the `:` character is forbidden |
 | reserved names (`CON`, `NUL`, `aux.txt`) | forbidden |
 | `Report.txt` + `report.txt` | case-insensitive uniqueness |
 | symlink `docs -> /etc` and writing through it | symlinks are created last, never pointing outward |
 | a pre-planted directory symlink | path is checked after resolving the parent |
 | a "bomb" of gigabytes | write size is bounded by the index, plus a compression-ratio limit |
-⚙
 
 Path validation is done twice: on write (so no junk is created) and on read (so no foreign junk is unpacked).
 
@@ -229,21 +227,19 @@ Path validation is done twice: on write (so no junk is created) and on read (so 
 
 126 MiB of mixed data (76 MiB of text + 50 MiB incompressible), this machine, `--release`:
 
-| Mode ↕▾ | Archive ↕▾ | Of original ↕▾ | Packing speed ↕▾ |
+| Mode | Archive | Of original | Packing speed |
 |---|---|---|---|
-| −`-x1` deflate | 50.7 MiB | 40.2 % | 227 MiB/s |
+| `-x1` deflate | 50.7 MiB | 40.2 % | 227 MiB/s |
 | `-x5` brotli | 50.0 MiB | 39.6 % | 185 MiB/s |
 | `-x9` brotli | 50.0 MiB | 39.6 % | 58 MiB/s |
-⚙
 
 2000 files of 8 KB each (33 MiB) — this is where solid mode matters:
 
-| Mode ↕▾ | Archive ↕▾ | Compression ↕▾ | Time ↕▾ |
+| Mode | Archive | Compression | Time |
 |---|---|---|---|
-| −normal `-x5` | 0.72 MiB | 45× | 1.48 s |
-| −`--solid -x5` | 0.32 MiB | 101× | 0.45 s |
-| −`--solid -x9` | 0.32 MiB | 103× | 1.99 s |
-⚙
+| normal `-x5` | 0.72 MiB | 45× | 1.48 s |
+| `--solid -x5` | 0.32 MiB | 101× | 0.45 s |
+| `--solid -x9` | 0.32 MiB | 103× | 1.99 s |
 
 Extraction is around 700 MiB/s; integrity verification is at about the same speed.
 
@@ -251,7 +247,7 @@ Encryption adds 16 bytes per megabyte of data and about 0.5 s for key derivation
 
 ## Format
 
-Full specification: [docs/format.md](https://docs/format.md).
+Byte-level layout: the module documentation in [`src/format.rs`](../src/format.rs).
 
 ```
 "PLZ1" | data blocks | index (CBOR) | index length u64 | BLAKE3 of index | "PLZ1"
@@ -263,10 +259,6 @@ The index at the end — like 7z: it allows writing the archive as a stream with
 The version 2 reader opens version 1 archives too — the format is backward compatible.
 
 ## Design
-
-Identity and interface: [`design/pliczip-design.html`](https://design/pliczip-design.html) — a self-contained mockup (mark, palette, typography, CLI, main window, creation dialog, errors, ideas). Opens in a browser; the theme toggles with a button in the top right or with the `#light` link.
-
-Decisions and rationale — in [`docs/design.md`](https://docs/design.md), the mark — [`design/mark.svg`](https://design/mark.svg), snapshots — `design/preview*.png`.
 
 Principles in brief: the lightning bolt as a metaphor for the name, brass as the only accent, green and red reserved for integrity, and a permanent "Integrity confirmed" badge in the main window — because that is the one thing that essentially distinguishes PlicZip from 7-Zip.
 
@@ -306,15 +298,13 @@ gui/
   app.rs       state: open archive, dialogs, background operations
   views.rs     main window: menu, toolbar, table, summary, status bar
   dialogs.rs   creation, extraction, password, error, progress
-  theme.rs     palette from docs/design.md, accents
+  theme.rs     palette, accents
   config.rs    settings in JSON
   icon.rs      application mark, assembled in code
   progress.rs  progress channel and remaining-time estimation
 tests/
   cli.rs       end-to-end tests through real processes
   security.rs  hand-assembled malicious archives
-docs/format.md specification
-design/        identity and interface mockup
 legacy/        the YZ01 format prototype the project grew from
 ```
 
@@ -339,5 +329,5 @@ let mut ar = Archive::open_with(&archive, Some("password"))?;
 ar.extract(&ExtractOptions { output: dir, ..Default::default() })?;
 ```
 
-License: MIT OR Apache-2.0.
+License: [MIT](../LICENSE-MIT) OR [Apache-2.0](../LICENSE-APACHE).
 

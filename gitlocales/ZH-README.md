@@ -29,14 +29,13 @@ cargo build --release
 
 ## 命令
 
-| 命令 ↕▾ | 别名 ↕▾ | 功能 ↕▾ |
+| 命令 | 别名 | 功能 |
 |---|---|---|
-| −`add <归档> <路径...>` | `a` | 打包文件和目录 |
-| −`extract <归档>` | `x` | 解压 |
-| −`list <归档>` | `l` | 显示内容 |
-| −`test <归档>` | `t` | 校验完整性，不写入任何内容 |
-| −`info <归档>` | `i` | 归档信息 |
-⚙
+| `add <归档> <路径...>` | `a` | 打包文件和目录 |
+| `extract <归档>` | `x` | 解压 |
+| `list <归档>` | `l` | 显示内容 |
+| `test <归档>` | `t` | 校验完整性，不写入任何内容 |
+| `info <归档>` | `i` | 归档信息 |
 
 ### 打包
 
@@ -54,13 +53,12 @@ pliczip a src.plz src --include "**/*.rs"   # 仅需要的文件
 
 ### 压缩级别
 
-| 级别 ↕▾ | 方法 ↕▾ | 使用场景 ↕▾ |
+| 级别 | 方法 | 使用场景 |
 |---|---|---|
-| −`-x0` | 不压缩 | 已压缩的文件（视频、jpg、其他归档） |
-| −`-x1..4` | deflate | 快速、中等 |
-| −`-x5`（默认） | brotli q5 | 合理平衡 |
+| `-x0` | 不压缩 | 已压缩的文件（视频、jpg、其他归档） |
+| `-x1..4` | deflate | 快速、中等 |
+| `-x5`（默认） | brotli q5 | 合理平衡 |
 | `-x9..11` | brotli q9..q11 | 慢，但文本/代码/日志压缩明显更好 |
-⚙
 
 如果压缩未能缩小某个块，则按原样存储——归档不会膨胀。
 
@@ -201,17 +199,16 @@ pliczip-gui backup.plz         # 打开归档（双击即为此方式）
 
 ## 解压安全
 
-| 攻击 ↕▾ | 防御 ↕▾ |
+| 攻击 | 防御 |
 |---|---|
-| −`../../secret`（zip-slip） | 路径策略：格式禁止 `..`、`.` 和空段 |
-| −绝对路径 `/etc/…`、`C:\…` | 在索引校验时禁止 |
-| −NTFS 备用数据流（`file.txt:hidden`） | 禁止 `:` 字符 |
-| −保留名（`CON`、`NUL`、`aux.txt`） | 禁止 |
-| −`Report.txt` + `report.txt` | 大小写不敏感的唯一性 |
-| −符号链接 `docs -> /etc` 并通过它写入 | 链接最后创建，不指向外部 |
-| −预埋的目录符号链接 | 解析父目录后再校验路径 |
-| −千兆级"炸弹" | 写入量由索引限定，外加压缩比上限 |
-⚙
+| `../../secret`（zip-slip） | 路径策略：格式禁止 `..`、`.` 和空段 |
+| 绝对路径 `/etc/…`、`C:\…` | 在索引校验时禁止 |
+| NTFS 备用数据流（`file.txt:hidden`） | 禁止 `:` 字符 |
+| 保留名（`CON`、`NUL`、`aux.txt`） | 禁止 |
+| `Report.txt` + `report.txt` | 大小写不敏感的唯一性 |
+| 符号链接 `docs -> /etc` 并通过它写入 | 链接最后创建，不指向外部 |
+| 预埋的目录符号链接 | 解析父目录后再校验路径 |
+| 千兆级"炸弹" | 写入量由索引限定，外加压缩比上限 |
 
 路径校验执行两次：写入时（避免生成垃圾）和读取时（避免解出他人的垃圾）。
 
@@ -219,21 +216,19 @@ pliczip-gui backup.plz         # 打开归档（双击即为此方式）
 
 126 MiB 混合数据（76 MiB 文本 + 50 MiB 不可压缩数据），本机，`--release`：
 
-| 模式 ↕▾ | 归档 ↕▾ | 相对原始 ↕▾ | 打包速度 ↕▾ |
+| 模式 | 归档 | 相对原始 | 打包速度 |
 |---|---|---|---|
-| −`-x1` deflate | 50.7 MiB | 40.2 % | 227 MiB/s |
-| −`-x5` brotli | 50.0 MiB | 39.6 % | 185 MiB/s |
-| −`-x9` brotli | 50.0 MiB | 39.6 % | 58 MiB/s |
-⚙
+| `-x1` deflate | 50.7 MiB | 40.2 % | 227 MiB/s |
+| `-x5` brotli | 50.0 MiB | 39.6 % | 185 MiB/s |
+| `-x9` brotli | 50.0 MiB | 39.6 % | 58 MiB/s |
 
 2000 个 8 KB 文件（33 MiB）——这里 solid 模式起决定作用：
 
-| 模式 ↕▾ | 归档 ↕▾ | 压缩比 ↕▾ | 时间 ↕▾ |
+| 模式 | 归档 | 压缩比 | 时间 |
 |---|---|---|---|
-| −普通 `-x5` | 0.72 MiB | 45× | 1.48 s |
-| −`--solid -x5` | 0.32 MiB | 101× | 0.45 s |
-| −`--solid -x9` | 0.32 MiB | 103× | 1.99 s |
-⚙
+| 普通 `-x5` | 0.72 MiB | 45× | 1.48 s |
+| `--solid -x5` | 0.32 MiB | 101× | 0.45 s |
+| `--solid -x9` | 0.32 MiB | 103× | 1.99 s |
 
 解压约 700 MiB/s，完整性校验大致相同。
 
@@ -241,7 +236,7 @@ pliczip-gui backup.plz         # 打开归档（双击即为此方式）
 
 ## 格式
 
-完整规范：[docs/format.md](https://docs/format.md)。
+字节级布局：见 [`src/format.rs`](../src/format.rs) 的模块文档。
 
 ```
 "PLZ1" | 数据块 | 索引 (CBOR) | 索引长度 u64 | 索引的 BLAKE3 | "PLZ1"
@@ -253,10 +248,6 @@ pliczip-gui backup.plz         # 打开归档（双击即为此方式）
 版本 2 的读取器也能打开版本 1 的归档——格式向后兼容。
 
 ## 设计
-
-品牌与界面：[`design/pliczip-design.html`](https://design/pliczip-design.html)——自包含的样稿（标志、调色板、排版、CLI、主窗口、创建对话框、错误、创意）。在浏览器中打开，主题通过右上角的按钮或 `#light` 链接切换。
-
-决策与论证见 [`docs/design.md`](https://docs/design.md)，标志见 [`design/mark.svg`](https://design/mark.svg)，截图见 `design/preview*.png`。
 
 简要原则：闪电作为名称的隐喻，黄铜作为唯一强调色，绿色和红色保留给完整性，主窗口中常驻"完整性已确认"徽章——因为这是 PlicZip 本质上区别于 7-Zip 的唯一一点。
 
@@ -292,15 +283,13 @@ gui/
   app.rs       状态：打开的归档、对话框、后台操作
   views.rs     主窗口：菜单、工具栏、表格、概要、状态栏
   dialogs.rs   创建、解压、密码、错误、进度
-  theme.rs     来自 docs/design.md 的调色板、强调色
+  theme.rs     调色板、强调色
   config.rs    JSON 中的设置
   icon.rs      应用标志，由代码构建
   progress.rs  进度通道和剩余时间估算
 tests/
   cli.rs       通过真实进程的端到端测试
   security.rs  手工构造的恶意归档
-docs/format.md 规范
-design/        品牌和界面样稿
 legacy/        项目由此生长而来的 YZ01 格式原型
 ```
 
@@ -325,5 +314,5 @@ let mut ar = Archive::open_with(&archive, Some("密码"))?;
 ar.extract(&ExtractOptions { output: dir, ..Default::default() })?;
 ```
 
-许可：MIT OR Apache-2.0。
+许可：[MIT](../LICENSE-MIT) OR [Apache-2.0](../LICENSE-APACHE)。
 
