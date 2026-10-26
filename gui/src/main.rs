@@ -11,6 +11,9 @@ mod app;
 mod config;
 mod dialogs;
 mod icon;
+// Кодировщик ICO и значок архива из `mark` использует только build.rs.
+#[allow(dead_code)]
+mod mark;
 mod progress;
 mod shell;
 mod theme;

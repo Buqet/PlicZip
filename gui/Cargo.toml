@@ -16,6 +16,10 @@ serde_json = "1"
 zeroize = "1"
 rfd = "0.17"
 
+[build-dependencies]
+# Иконки и сведения о версии в ресурсах exe (только при сборке под Windows).
+embed-resource = "3"
+
 [target.'cfg(windows)'.dependencies]
 # Реестр и SHChangeNotify для интеграции с Проводником (уже есть в дереве через winit).
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Registry", "Win32_UI_Shell"] }

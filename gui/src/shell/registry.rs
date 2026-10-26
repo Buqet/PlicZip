@@ -64,13 +64,15 @@ pub fn plan(exe: &Path) -> Vec<Value> {
     let mut set = |key: String, name: Option<&'static str>, data: String| {
         out.push(Value { key, name, data })
     };
+    // Индексы иконок в ресурсах exe (см. gui/build.rs): 0 — приложение, 1 — архив.
     let icon = format!("\"{}\",0", exe.display());
+    let archive_icon = format!("\"{}\",1", exe.display());
 
     // Тип файла и ассоциация.
     set(EXT.into(), None, PROG_ID.into());
     set(format!(r"{EXT}\OpenWithProgids"), Some(PROG_ID), String::new());
     set(PROG_ID.into(), None, "Архив PlicZip".into());
-    set(format!(r"{PROG_ID}\DefaultIcon"), None, icon.clone());
+    set(format!(r"{PROG_ID}\DefaultIcon"), None, archive_icon);
     set(format!(r"{PROG_ID}\shell"), None, "open".into());
     set(format!(r"{PROG_ID}\shell\open"), None, "Открыть в PlicZip".into());
     set(format!(r"{PROG_ID}\shell\open\command"), None, command(exe, None));
@@ -139,6 +141,14 @@ mod tests {
             get(&plan, r"PlicZip.Archive\shell\open\command", None),
             Some(r#""C:\Program Files\PlicZip\pliczip-gui.exe" "%1""#)
         );
+    }
+
+    #[test]
+    fn icons_come_from_exe_resources() {
+        let plan = plan(&exe());
+        let exe = r#""C:\Program Files\PlicZip\pliczip-gui.exe""#;
+        assert_eq!(get(&plan, r"PlicZip.Archive\DefaultIcon", None), Some(format!("{exe},1").as_str()));
+        assert_eq!(get(&plan, r"*\shell\PlicZip", Some("Icon")), Some(format!("{exe},0").as_str()));
     }
 
     #[test]

@@ -334,7 +334,9 @@ gui/
   dialogs.rs   creation, extraction, password, error, progress
   theme.rs     palette from docs/design.md, accents
   config.rs    settings in JSON
-  icon.rs      application mark, assembled in code
+  icon.rs      window icon
+  mark.rs      app mark and archive icon, ICO encoder — shared with build.rs
+  build.rs     icons and version info in the exe resources (Windows)
   progress.rs  progress channel and remaining-time estimation
 tests/
   cli.rs       end-to-end tests through real processes
