@@ -8,6 +8,7 @@ use zeroize::Zeroizing;
 
 use crate::config::Config;
 use crate::progress::{self, Done, Msg, OpState};
+use crate::shell::Launch;
 use crate::{dialogs, theme, views};
 
 #[derive(Clone)]
@@ -175,6 +176,14 @@ pub enum ModalKind {
     About,
 }
 
+/// Что сделать сразу после открытия архива (пункты контекстного меню).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum AfterOpen {
+    ExtractHere,
+    ExtractTo,
+    Test,
+}
+
 pub struct App {
     pub cfg: Config,
     pub loaded: Option<Loaded>,
@@ -188,10 +197,13 @@ pub struct App {
     pub toast: Option<Toast>,
     /// Поставить фокус в поле поиска на следующем кадре (Ctrl+F).
     pub focus_search: bool,
+    /// Отложенное действие для архива, который сейчас открывается
+    /// (зашифрованный сначала спрашивает пароль).
+    after_open: Option<(PathBuf, AfterOpen)>,
 }
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>, startup_archive: Option<PathBuf>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, launch: Launch) -> Self {
         let cfg = Config::load();
         theme::apply(&cc.egui_ctx, &cfg);
         let mut app = App {
@@ -205,11 +217,79 @@ impl App {
             sort_desc: false,
             toast: None,
             focus_search: false,
+            after_open: None,
         };
-        if let Some(path) = startup_archive {
-            app.begin_open(path);
-        }
+        app.start(launch);
         app
+    }
+
+    /// Выполняет действие, с которым запущено окно.
+    fn start(&mut self, launch: Launch) {
+        match launch {
+            Launch::Empty | Launch::Register | Launch::Unregister => {}
+            Launch::Open(path) => self.begin_open(path),
+            Launch::Add(sources) => self.modal = Modal::Create(CreateDlg::from_sources(sources)),
+            Launch::Compress(sources) => {
+                let dlg = CreateDlg::from_sources(sources);
+                if let Err(err) = self.spawn_create(&dlg) {
+                    self.modal = Modal::Error {
+                        title: "Не удалось сжать".into(),
+                        message: err,
+                        hint: "Попробуй «Добавить в архив…» — там можно выбрать параметры.".into(),
+                    };
+                }
+            }
+            Launch::ExtractHere(path) => self.open_then(path, AfterOpen::ExtractHere),
+            Launch::ExtractTo(path) => self.open_then(path, AfterOpen::ExtractTo),
+            Launch::Test(path) => self.open_then(path, AfterOpen::Test),
+        }
+    }
+
+    /// Открывает архив и выполняет действие, когда он откроется.
+    fn open_then(&mut self, path: PathBuf, action: AfterOpen) {
+        self.after_open = Some((path.clone(), action));
+        self.begin_open(path);
+    }
+
+    /// Запускает отложенное действие, если открыт именно тот архив.
+    fn run_after_open(&mut self) {
+        let Some((path, action)) = self.after_open.take() else { return };
+        let Some(loaded) = &self.loaded else { return };
+        if loaded.path != path {
+            return;
+        }
+        match action {
+            AfterOpen::ExtractHere => {
+                let dir = path
+                    .parent()
+                    .filter(|d| !d.as_os_str().is_empty())
+                    .map(Path::to_path_buf)
+                    .unwrap_or_else(|| PathBuf::from("."));
+                self.spawn_extract(dir);
+            }
+            AfterOpen::ExtractTo => self.spawn_extract(default_extract_dir(&path)),
+            AfterOpen::Test => self.spawn_test(),
+        }
+    }
+
+    /// Встраивает PlicZip в контекстное меню Проводника или убирает его оттуда.
+    pub fn toggle_shell_integration(&mut self) {
+        let result = match crate::shell::status() {
+            crate::shell::Status::On => crate::shell::unregister().map(|()| "PlicZip убран из контекстного меню"),
+            _ => crate::shell::register().map(|()| "PlicZip добавлен в контекстное меню Проводника"),
+        };
+        match result {
+            Ok(text) => self.notify(text, true),
+            Err(err) => {
+                self.modal = Modal::Error {
+                    title: "Не удалось изменить интеграцию".into(),
+                    message: err,
+                    hint: "Записи делаются в HKCU\\Software\\Classes — права администратора не нужны. \
+                           Проверь, не блокирует ли реестр антивирус или групповая политика."
+                        .into(),
+                };
+            }
+        }
     }
 
     pub fn modal_kind(&self) -> ModalKind {
@@ -230,6 +310,7 @@ impl App {
         let encrypted = match archive_encrypted(&path) {
             Ok(v) => v,
             Err(err) => {
+                self.after_open = None;
                 self.modal = Modal::Error {
                     title: "Не удалось открыть архив".into(),
                     message: format!("{err:#}"),
@@ -275,12 +356,14 @@ impl App {
                 });
                 self.modal = Modal::None;
                 self.last_action = None;
+                self.run_after_open();
             }
             Err(err) => {
                 if let Modal::Password(pw) = &mut self.modal {
                     pw.error = Some(format!("{err:#}"));
                     pw.password.clear();
                 } else {
+                    self.after_open = None;
                     self.modal = Modal::Error {
                         title: "Не удалось открыть архив".into(),
                         message: format!("{err:#}"),
@@ -454,6 +537,7 @@ impl App {
             .set_title("Открыть архив")
             .pick_file();
         if let Some(path) = picked {
+            self.after_open = None;
             self.begin_open(path);
         }
     }
@@ -563,6 +647,7 @@ impl App {
         }
         if let Some(plz) = dropped.iter().find(|p| is_plz(p)) {
             let plz = plz.clone();
+            self.after_open = None;
             self.begin_open(plz);
         } else if self.modal_kind() == ModalKind::None {
             self.modal = Modal::Create(CreateDlg::from_sources(dropped));
@@ -617,18 +702,9 @@ impl eframe::App for App {
 
 impl CreateDlg {
     pub fn from_sources(sources: Vec<PathBuf>) -> Self {
-        let output = sources
-            .first()
-            .map(|p| {
-                let stem = p
-                    .file_stem()
-                    .map(|s| s.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| "архив".into());
-                p.parent()
-                    .map(|d| d.join(format!("{stem}.plz")))
-                    .unwrap_or_else(|| PathBuf::from(format!("{stem}.plz")))
-            })
-            .unwrap_or_else(|| PathBuf::from("архив.plz"));
+        // Рядом с источником, его именем; несколько — именем общего каталога;
+        // занятое имя не перезаписывается: «имя (2).plz».
+        let output = crate::shell::args::archive_name_for(&sources, Path::is_dir, Path::exists);
         CreateDlg {
             sources,
             output: output.to_string_lossy().into_owned(),
