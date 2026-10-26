@@ -86,7 +86,7 @@ jobs:
           ext=""
           [ "$RUNNER_OS" = "Windows" ] && ext=".exe"
           mkdir "$name"
-          cp "$bin/pliczip$ext" "$bin/pliczip-gui$ext" README.md LICENSE "$name/"
+          cp "$bin/pliczip$ext" "$bin/pliczip-gui$ext" README.md LICENSE-MIT LICENSE-APACHE "$name/"
           if [ "$RUNNER_OS" = "Windows" ]; then
             asset="$name.zip"
             7z a -bd "$asset" "$name" >/dev/null

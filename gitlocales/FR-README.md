@@ -29,14 +29,13 @@ Rust pur uniquement : `flate2` (miniz_oxide), `brotli`, `chacha20poly1305`, `arg
 
 ## Commandes
 
-| Commande ↕▾ | Alias ↕▾ | Ce qu'elle fait ↕▾ |
+| Commande | Alias | Ce qu'elle fait |
 |---|---|---|
-| −`add <archive> <chemins...>` | `a` | empaqueter fichiers et répertoires |
-| −`extract <archive>` | `x` | extraire |
-| −`list <archive>` | `l` | afficher le contenu |
-| −`test <archive>` | `t` | vérifier l'intégrité sans rien écrire |
-| −`info <archive>` | `i` | informations sur l'archive |
-⚙
+| `add <archive> <chemins...>` | `a` | empaqueter fichiers et répertoires |
+| `extract <archive>` | `x` | extraire |
+| `list <archive>` | `l` | afficher le contenu |
+| `test <archive>` | `t` | vérifier l'intégrité sans rien écrire |
+| `info <archive>` | `i` | informations sur l'archive |
 
 ### Empaquetage
 
@@ -236,12 +235,11 @@ La validation des chemins se fait deux fois : à l'écriture (pour ne pas créer
 
 2000 fichiers de 8 Ko (33 MiB) — c'est là que le mode solid décide :
 
-| Mode ↕▾ | Archive ↕▾ | Compression ↕▾ | Temps ↕▾ |
+| Mode | Archive | Compression | Temps |
 |---|---|---|---|
-| −normal `-x5` | 0.72 MiB | 45× | 1.48 s |
-| −`--solid -x5` | 0.32 MiB | 101× | 0.45 s |
+| normal `-x5` | 0.72 MiB | 45× | 1.48 s |
+| `--solid -x5` | 0.32 MiB | 101× | 0.45 s |
 | `--solid -x9` | 0.32 MiB | 103× | 1.99 s |
-⚙
 
 L'extraction est d'environ 700 MiB/s ; la vérification d'intégrité est à peu près à la même vitesse.
 
@@ -249,7 +247,7 @@ Le chiffrement ajoute 16 octets par mégaoctet de données et environ 0.5 s pour
 
 ## Format
 
-Spécification complète : [docs/format.md](https://docs/format.md).
+Disposition octet par octet : documentation du module [`src/format.rs`](../src/format.rs).
 
 ```
 "PLZ1" | blocs de données | index (CBOR) | longueur de l'index u64 | BLAKE3 de l'index | "PLZ1"
@@ -261,10 +259,6 @@ Index en fin de fichier — comme dans 7z : cela permet d'écrire l'archive en f
 Le lecteur de la version 2 ouvre aussi les archives de la version 1 — le format est rétrocompatible.
 
 ## Design
-
-Identité et interface : [`design/pliczip-design.html`](https://design/pliczip-design.html) — maquette autonome (signe, palette, typographie, CLI, fenêtre principale, dialogue de création, erreurs, idées). S'ouvre dans le navigateur ; le thème bascule via un bouton en haut à droite ou via le lien `#light`.
-
-Décisions et justifications — dans [`docs/design.md`](https://docs/design.md), le signe — [`design/mark.svg`](https://design/mark.svg), captures — `design/preview*.png`.
 
 Principes en bref : l'éclair comme métaphore du nom, le laiton comme seul accent, le vert et le rouge réservés à l'intégrité, et un badge permanent « Intégrité confirmée » dans la fenêtre principale — parce que c'est la seule chose qui distingue essentiellement PlicZip de 7-Zip.
 
@@ -304,15 +298,13 @@ gui/
   app.rs       état : archive ouverte, dialogues, opérations en arrière-plan
   views.rs     fenêtre principale : menu, barre d'outils, table, résumé, barre d'état
   dialogs.rs   création, extraction, mot de passe, erreur, progression
-  theme.rs     palette de docs/design.md, accents
+  theme.rs     palette, accents
   config.rs    paramètres en JSON
   icon.rs      signe de l'application, assemblé en code
   progress.rs  canal de progression et estimation du temps restant
 tests/
   cli.rs       tests de bout en bout via de vrais processus
   security.rs  archives malveillantes assemblées à la main
-docs/format.md spécification
-design/        identité et maquette d'interface
 legacy/        prototype du format YZ01 dont le projet a grandi
 ```
 
@@ -337,5 +329,5 @@ let mut ar = Archive::open_with(&archive, Some("mot de passe"))?;
 ar.extract(&ExtractOptions { output: dir, ..Default::default() })?;
 ```
 
-Licence : MIT OR Apache-2.0.
+Licence : [MIT](../LICENSE-MIT) OR [Apache-2.0](../LICENSE-APACHE).
 

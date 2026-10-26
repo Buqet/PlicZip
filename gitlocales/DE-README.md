@@ -29,14 +29,13 @@ Nur reines Rust: `flate2` (miniz_oxide), `brotli`, `chacha20poly1305`, `argon2` 
 
 ## Befehle
 
-| Befehl ↕▾ | Alias ↕▾ | Was er tut ↕▾ |
+| Befehl | Alias | Was er tut |
 |---|---|---|
-| −`add <archiv> <pfade...>` | `a` | Dateien und Verzeichnisse packen |
+| `add <archiv> <pfade...>` | `a` | Dateien und Verzeichnisse packen |
 | `extract <archiv>` | `x` | entpacken |
 | `list <archiv>` | `l` | Inhalt anzeigen |
 | `test <archiv>` | `t` | Integrität prüfen, ohne etwas zu schreiben |
 | `info <archiv>` | `i` | Archivinformationen |
-⚙
 
 ### Packen
 
@@ -54,13 +53,12 @@ Ein Verzeichnis wird unter seinem eigenen Namen gespeichert: `a x.plz photos` er
 
 ### Kompressionsstufen
 
-| Stufe ↕▾ | Methode ↕▾ | Wann verwenden ↕▾ |
+| Stufe | Methode | Wann verwenden |
 |---|---|---|
-| −`-x0` | keine Kompression | bereits komprimiert (Video, JPG, andere Archive) |
+| `-x0` | keine Kompression | bereits komprimiert (Video, JPG, andere Archive) |
 | `-x1..4` | deflate | schnell, mäßig |
 | `-x5` (Standard) | brotli q5 | vernünftiger Kompromiss |
 | `-x9..11` | brotli q9..q11 | langsam, aber Text/Code/Logs komprimieren deutlich besser |
-⚙
 
 Wenn die Kompression einen Block nicht verkleinert, wird er unverändert gespeichert — das Archiv wird nicht aufgebläht.
 
@@ -211,17 +209,16 @@ In verschlüsselten Archiven kommt ein AEAD-Tag pro Stück hinzu, und Block-Hash
 
 ## Entpackungssicherheit
 
-| Angriff ↕▾ | Schutz ↕▾ |
+| Angriff | Schutz |
 |---|---|
-| −`../../secret` (zip-slip) | Pfadrichtlinie: `..`, `.`, leere Segmente im Format verboten |
-| −absolute Pfade `/etc/…`, `C:\…` | verboten bei der Indexvalidierung |
+| `../../secret` (zip-slip) | Pfadrichtlinie: `..`, `.`, leere Segmente im Format verboten |
+| absolute Pfade `/etc/…`, `C:\…` | verboten bei der Indexvalidierung |
 | NTFS-ADS (`file.txt:hidden`) | Zeichen `:` verboten |
 | reservierte Namen (`CON`, `NUL`, `aux.txt`) | verboten |
 | `Report.txt` + `report.txt` | Eindeutigkeit ohne Beachtung der Groß-/Kleinschreibung |
 | Link `docs -> /etc` und Schreiben darüber | Links werden zuletzt erstellt, nie nach außen |
 | vorab platzierter Verzeichnis-Link | Pfad wird nach Auflösung des Elternverzeichnisses geprüft |
 | „Bombe" auf Gigabytes | Schreibmenge durch Index begrenzt, plus Kompressionsverhältnis-Limit |
-⚙
 
 Die Pfadvalidierung erfolgt zweimal: beim Schreiben (damit kein Müll entsteht) und beim Lesen (damit kein fremder Müll entpackt wird).
 
@@ -229,21 +226,19 @@ Die Pfadvalidierung erfolgt zweimal: beim Schreiben (damit kein Müll entsteht) 
 
 126 MiB gemischte Daten (76 MiB Text + 50 MiB inkompressibel), diese Maschine, `--release`:
 
-| Modus ↕▾ | Archiv ↕▾ | Vom Original ↕▾ | Packgeschwindigkeit ↕▾ |
+| Modus | Archiv | Vom Original | Packgeschwindigkeit |
 |---|---|---|---|
-| −`-x1` deflate | 50.7 MiB | 40.2 % | 227 MiB/s |
-| −`-x5` brotli | 50.0 MiB | 39.6 % | 185 MiB/s |
-| −`-x9` brotli | 50.0 MiB | 39.6 % | 58 MiB/s |
-⚙
+| `-x1` deflate | 50.7 MiB | 40.2 % | 227 MiB/s |
+| `-x5` brotli | 50.0 MiB | 39.6 % | 185 MiB/s |
+| `-x9` brotli | 50.0 MiB | 39.6 % | 58 MiB/s |
 
 2000 Dateien à 8 KB (33 MiB) — hier entscheidet der Solid-Modus:
 
-| Modus ↕▾ | Archiv ↕▾ | Kompression ↕▾ | Zeit ↕▾ |
+| Modus | Archiv | Kompression | Zeit |
 |---|---|---|---|
-| −normal `-x5` | 0.72 MiB | 45× | 1.48 s |
+| normal `-x5` | 0.72 MiB | 45× | 1.48 s |
 | `--solid -x5` | 0.32 MiB | 101× | 0.45 s |
 | `--solid -x9` | 0.32 MiB | 103× | 1.99 s |
-⚙
 
 Entpacken liegt bei rund 700 MiB/s; die Integritätsprüfung ist etwa gleich schnell.
 
@@ -251,7 +246,7 @@ Verschlüsselung fügt 16 Byte pro Megabyte Daten hinzu und etwa 0.5 s für die 
 
 ## Format
 
-Vollständige Spezifikation: [docs/format.md](https://docs/format.md).
+Byte-genaues Layout: Moduldokumentation in [`src/format.rs`](../src/format.rs).
 
 ```
 "PLZ1" | Datenblöcke | Index (CBOR) | Indexlänge u64 | BLAKE3 des Index | "PLZ1"
@@ -263,10 +258,6 @@ Index am Ende — wie bei 7z: ermöglicht das Schreiben des Archivs im Strom, oh
 Der Leser der Version 2 öffnet auch Archive der Version 1 — das Format ist abwärtskompatibel.
 
 ## Design
-
-Identität und Oberfläche: [`design/pliczip-design.html`](https://design/pliczip-design.html) — eigenständiges Mockup (Zeichen, Palette, Typografie, CLI, Hauptfenster, Erstellungsdialog, Fehler, Ideen). Öffnet im Browser; das Theme wechselt per Knopf oben rechts oder über den Link `#light`.
-
-Entscheidungen und Begründungen — in [`docs/design.md`](https://docs/design.md), das Zeichen — [`design/mark.svg`](https://design/mark.svg), Schnappschüsse — `design/preview*.png`.
 
 Prinzipien kurz: der Blitz als Metapher des Namens, Messing als einziger Akzent, Grün und Rot für Integrität reserviert, und eine dauerhafte Plakette „Integrität bestätigt" im Hauptfenster — weil genau das PlicZip wesentlich von 7-Zip unterscheidet.
 
@@ -306,15 +297,13 @@ gui/
   app.rs       Zustand: geöffnetes Archiv, Dialoge, Hintergrundoperationen
   views.rs     Hauptfenster: Menü, Werkzeugleiste, Tabelle, Übersicht, Statusleiste
   dialogs.rs   Erstellung, Entpacken, Passwort, Fehler, Fortschritt
-  theme.rs     Palette aus docs/design.md, Akzente
+  theme.rs     Palette, Akzente
   config.rs    Einstellungen in JSON
   icon.rs      Anwendungszeichen, im Code zusammengesetzt
   progress.rs  Fortschrittskanal und Restzeitschätzung
 tests/
   cli.rs       End-to-End-Tests über echte Prozesse
   security.rs  manuell zusammengesetzte bösartige Archive
-docs/format.md Spezifikation
-design/        Identität und Oberflächen-Mockup
 legacy/        Prototyp des Formats YZ01, aus dem das Projekt entstand
 ```
 
@@ -339,5 +328,5 @@ let mut ar = Archive::open_with(&archive, Some("passwort"))?;
 ar.extract(&ExtractOptions { output: dir, ..Default::default() })?;
 ```
 
-Lizenz: MIT OR Apache-2.0.
+Lizenz: [MIT](../LICENSE-MIT) OR [Apache-2.0](../LICENSE-APACHE).
 
