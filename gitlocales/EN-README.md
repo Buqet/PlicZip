@@ -185,7 +185,25 @@ computed over the last seconds, not averaged from the start;
 - **settings** — theme (dark/light) and accent (brass/steel/green)
 saved to `%APPDATA%/pliczip/config.json`.
 
-Not yet done: modifying an existing archive (the "Modify" button), associating `.plz` with Explorer, and a context menu — that's the next block.
+### Windows Explorer context menu
+
+On Windows, the GUI can register Explorer integration for the current user
+without administrator rights:
+
+```powershell
+pliczip-gui.exe --install-context-menu
+```
+
+After installation, right-clicking a `.plz` file opens it in PlicZip, while
+right-clicking a file or directory offers to add it to a new archive. Remove
+the integration with:
+
+```powershell
+pliczip-gui.exe --uninstall-context-menu
+```
+
+The registration uses `HKCU` only, so it does not trigger UAC. It is safe to
+run the command again after moving or updating the application.
 
 ## Integrity
 
@@ -340,4 +358,3 @@ ar.extract(&ExtractOptions { output: dir, ..Default::default() })?;
 ```
 
 License: MIT OR Apache-2.0.
-

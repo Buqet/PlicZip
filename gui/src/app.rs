@@ -67,8 +67,8 @@ pub fn packed_size(index: &PzIndex, entry: &PzEntry) -> Option<u64> {
         return None;
     }
     Some(
-        (block.stored_size as u128 * entry.size as u128 / block.size as u128)
-            .min(u64::MAX as u128) as u64,
+        (block.stored_size as u128 * entry.size as u128 / block.size as u128).min(u64::MAX as u128)
+            as u64,
     )
 }
 
@@ -106,13 +106,17 @@ impl Loaded {
         match sort {
             Sort::Path => view.sort_by(|&a, &b| index.entries[a].path.cmp(&index.entries[b].path)),
             Sort::Size => view.sort_by_key(|&i| index.entries[i].size),
-            Sort::Packed => view.sort_by_key(|&i| packed_size(index, &index.entries[i]).unwrap_or(0)),
+            Sort::Packed => {
+                view.sort_by_key(|&i| packed_size(index, &index.entries[i]).unwrap_or(0))
+            }
             Sort::Ratio => view.sort_by(|&a, &b| {
                 let fa = saved_fraction(index, &index.entries[a]).unwrap_or(-1.0);
                 let fb = saved_fraction(index, &index.entries[b]).unwrap_or(-1.0);
                 fa.total_cmp(&fb)
             }),
-            Sort::Method => view.sort_by(|&a, &b| method(&index.entries[a]).cmp(method(&index.entries[b]))),
+            Sort::Method => {
+                view.sort_by(|&a, &b| method(&index.entries[a]).cmp(method(&index.entries[b])))
+            }
             Sort::Date => view.sort_by_key(|&i| index.entries[i].mtime),
         }
         if desc {
@@ -191,7 +195,11 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>, startup_archive: Option<PathBuf>) -> Self {
+    pub fn new(
+        cc: &eframe::CreationContext<'_>,
+        startup_archive: Option<PathBuf>,
+        startup_sources: Option<PathBuf>,
+    ) -> Self {
         let cfg = Config::load();
         theme::apply(&cc.egui_ctx, &cfg);
         let mut app = App {
@@ -208,6 +216,9 @@ impl App {
         };
         if let Some(path) = startup_archive {
             app.begin_open(path);
+        }
+        if let Some(source) = startup_sources {
+            app.modal = Modal::Create(CreateDlg::from_sources(vec![source]));
         }
         app
     }
@@ -291,9 +302,10 @@ impl App {
         }
     }
 
-
     pub fn spawn_extract(&mut self, output: PathBuf) {
-        let Some(loaded) = self.loaded.as_ref() else { return };
+        let Some(loaded) = self.loaded.as_ref() else {
+            return;
+        };
         let path = loaded.path.clone();
         let password = loaded.password.clone();
         let total = loaded.meta.index.total_size();
@@ -318,7 +330,9 @@ impl App {
     }
 
     pub fn spawn_test(&mut self) {
-        let Some(loaded) = self.loaded.as_ref() else { return };
+        let Some(loaded) = self.loaded.as_ref() else {
+            return;
+        };
         let path = loaded.path.clone();
         let password = loaded.password.clone();
         let total = loaded.meta.index.total_size();
@@ -381,7 +395,8 @@ impl App {
         self.op = Some(OpState::new("сжатие", 0));
         self.modal = Modal::None;
         std::thread::spawn(move || {
-            let stats = pliczip::writer::create(&output, &inputs, &opts).map_err(|e| format!("{e:#}"));
+            let stats =
+                pliczip::writer::create(&output, &inputs, &opts).map_err(|e| format!("{e:#}"));
             let _ = tx.send(Msg::Done(Box::new(Done::Create {
                 path: output,
                 stats,
@@ -464,7 +479,9 @@ impl App {
         if self.modal_kind() != ModalKind::None || self.op.is_some() {
             return;
         }
-        let pressed = |key| ctx.input_mut(|i| i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, key)));
+        let pressed = |key| {
+            ctx.input_mut(|i| i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, key)))
+        };
         if pressed(Key::O) {
             self.pick_and_open();
         } else if pressed(Key::N) {
