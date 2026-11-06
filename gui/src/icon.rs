@@ -35,11 +35,7 @@ fn pixel(x: f32, y: f32) -> (u8, u8, u8, u8) {
 
     // Фон — градиент от #24282F к #121418.
     let t = ((x + y) / 512.0).clamp(0.0, 1.0);
-    let bg = lerp(
-        (0x24u8, 0x28u8, 0x2Fu8),
-        (0x12u8, 0x14u8, 0x18u8),
-        t,
-    );
+    let bg = lerp((0x24u8, 0x28u8, 0x2Fu8), (0x12u8, 0x14u8, 0x18u8), t);
 
     // Зубцы: два ряда латунных квадратов.
     let mut is_tooth = false;

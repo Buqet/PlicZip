@@ -51,7 +51,8 @@ pub struct FileSource {
 impl FileSource {
     /// Открывает файл и запоминает его длину.
     pub fn open(path: &Path) -> Result<Self> {
-        let file = File::open(crate::safety::native_path(path)).with_context(|| format!("не удалось открыть {:?}", path))?;
+        let file = File::open(crate::safety::native_path(path))
+            .with_context(|| format!("не удалось открыть {:?}", path))?;
         let len = file
             .metadata()
             .with_context(|| format!("не удалось прочитать размер {:?}", path))?
@@ -96,8 +97,8 @@ impl VolumeSource {
             if !path.exists() {
                 break;
             }
-            let file =
-                File::open(crate::safety::native_path(&path)).with_context(|| format!("не удалось открыть {:?}", path))?;
+            let file = File::open(crate::safety::native_path(&path))
+                .with_context(|| format!("не удалось открыть {:?}", path))?;
             let len = file.metadata()?.len();
             starts.push(total);
             total += len;

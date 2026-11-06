@@ -1,0 +1,20 @@
+name: Fuzzing
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 0"
+
+jobs:
+  paths:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Build fuzz target
+        run: cargo fuzz build paths
+      - name: Run fuzz target
+        run: cargo fuzz run paths -- -max_total_time=60

@@ -1,5 +1,6 @@
 [workspace]
 members = ["gui"]
+exclude = ["fuzz"]
 resolver = "2"
 
 [package]

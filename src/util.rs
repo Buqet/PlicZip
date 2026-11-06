@@ -38,7 +38,6 @@ impl EtaEstimator {
         EtaEstimator {
             samples: std::collections::VecDeque::new(),
         }
-
     }
 
     /// Отмечает новое значение счётчика.
@@ -402,7 +401,10 @@ mod tests {
         est.sample(1000);
         assert!(est.speed().is_none(), "по одной точке скорость неизвестна");
         assert!(est.eta(1000, 2000).is_none());
-        assert!(est.eta(1000, 0).is_none(), "без общего объёма остаток неизвестен");
+        assert!(
+            est.eta(1000, 0).is_none(),
+            "без общего объёма остаток неизвестен"
+        );
     }
 
     #[test]

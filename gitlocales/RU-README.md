@@ -386,3 +386,26 @@ ar.extract(&ExtractOptions { output: dir, ..Default::default() })?;
 ```
 
 Лицензия: MIT OR Apache-2.0.
+
+## Новые команды: keyfile, repair и обновления
+
+Для бинарного ключа используйте `keygen` и `--keyfile`:
+
+```text
+pliczip keygen archive.key --bytes 32
+pliczip a secret.plz ./docs --keyfile archive.key
+pliczip x secret.plz -o ./out --keyfile archive.key
+```
+
+`--keyfile` не зависит от кодировки и не заменяет парольный файл. Не указывайте `--keyfile` вместе с `--password-file`; храните ключ отдельно и не теряйте его.
+
+Если архив создан с `--recovery 10%`, повреждённые данные можно проверить и восстановить:
+
+```text
+pliczip t backup.plz
+pliczip repair backup.plz
+```
+
+`repair` изменяет архив только после проверки таблицы хешей и завершает работу с ошибкой, если parity недостаточно. Для проверки новой версии без открытия браузера используйте `pliczip update` или `pliczip update --json`. Команда только читает GitHub API и ничего не скачивает автоматически.
+
+Для fuzzing нужен nightly Rust: `rustup toolchain install nightly && RUSTUP_TOOLCHAIN=nightly cargo fuzz run paths -- -max_total_time=60`.

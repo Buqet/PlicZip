@@ -29,7 +29,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{bail, ensure, Context, Result};
-use reed_solomon_simd::ReedSolomonEncoder;
+use reed_solomon_simd::{ReedSolomonDecoder, ReedSolomonEncoder};
 
 use crate::source::{FileSource, Source};
 use crate::util::{Progress, ProgressSink};
@@ -654,6 +654,167 @@ pub fn verify(
         trailer_copy_ok,
         trailer_end_ok,
         unrecoverable_groups,
+    })
+}
+
+/// Итог исправления записи для восстановления.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RepairReport {
+    /// Сколько повреждённых data-кусков восстановлено.
+    pub restored_data: u64,
+    /// Сколько повреждённых parity-кусков восстановлено.
+    pub restored_parity: u64,
+    /// Были ли переписаны копия или конечный трейлер.
+    pub repaired_trailers: bool,
+}
+
+/// Восстанавливает повреждённые куски архива по parity и переписывает трейлеры.
+pub fn repair_file(path: &Path, show_progress: bool) -> Result<RepairReport> {
+    let source = FileSource::open(path)?;
+    let trailer = locate(&source)?
+        .ok_or_else(|| anyhow::anyhow!("в архиве нет записи для восстановления"))?;
+    let plan = trailer.plan.clone();
+    let mut table_raw = vec![0u8; plan.leaves() as usize * HASH_LEN as usize];
+    source.read_exact_at(&mut table_raw, plan.table_offset())?;
+    let table: Vec<[u8; 32]> = table_raw
+        .chunks_exact(HASH_LEN as usize)
+        .map(|chunk| chunk.try_into().unwrap())
+        .collect();
+    ensure!(
+        merkle_root(&table) == trailer.merkle_root,
+        "таблица хешей записи повреждена: восстановление невозможно"
+    );
+
+    let mut file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(crate::safety::native_path(path))
+        .with_context(|| format!("не удалось открыть {:?} на запись", path))?;
+    let mut restored_data = 0;
+    let mut restored_parity = 0;
+    let mut progress = Progress::new(
+        "восстановление",
+        plan.protected_len,
+        show_progress && plan.protected_len > 0,
+    );
+    let shard = plan.shard_size as usize;
+
+    for g in 0..plan.groups {
+        let k = plan.group_data(g) as usize;
+        let m = plan.group_parity(g) as usize;
+        let mut decoder = ReedSolomonDecoder::new(k, m, shard)?;
+        let mut data = vec![vec![0u8; shard]; k];
+        let mut missing_data = Vec::new();
+        for i in 0..k {
+            let j = plan.data_index(g, i as u64);
+            let ok = read_shard(&source, &plan, j, &mut data[i]).is_ok()
+                && leaf_hash(&data[i]) == table[j as usize];
+            if ok {
+                decoder.add_original_shard(i, &data[i])?;
+            } else {
+                missing_data.push((i, j));
+            }
+            progress.add(
+                plan.shard_size
+                    .min(plan.protected_len - j * plan.shard_size),
+            );
+        }
+
+        let mut missing_parity = Vec::new();
+        let parity_before = plan.parity_before(g);
+        for t in 0..m {
+            let global = plan.data_shards + parity_before + t as u64;
+            let mut shard_buf = vec![0u8; shard];
+            let ok = read_lenient(
+                &source,
+                &mut shard_buf,
+                plan.parity_offset() + (global - plan.data_shards) * plan.shard_size,
+            ) && leaf_hash(&shard_buf) == table[global as usize];
+            if ok {
+                decoder.add_recovery_shard(t, &shard_buf)?;
+            } else {
+                missing_parity.push(t);
+            }
+            progress.add(plan.shard_size);
+        }
+
+        if !missing_data.is_empty() {
+            let result = decoder.decode().with_context(|| {
+                format!(
+                    "не удалось восстановить группу {}: повреждено слишком много кусков",
+                    g
+                )
+            })?;
+            for (i, j) in missing_data {
+                let restored = result
+                    .restored_original(i)
+                    .ok_or_else(|| anyhow::anyhow!("декодер не вернул кусок {}", j))?;
+                data[i].copy_from_slice(restored);
+                let n = plan
+                    .protected_len
+                    .saturating_sub(j * plan.shard_size)
+                    .min(plan.shard_size) as usize;
+                file.seek(SeekFrom::Start(j * plan.shard_size))?;
+                file.write_all(&restored[..n])?;
+                restored_data += 1;
+            }
+        }
+
+        if !missing_parity.is_empty() {
+            let mut encoder = ReedSolomonEncoder::new(k, m, shard)?;
+            for original in &data {
+                encoder.add_original_shard(original)?;
+            }
+            let encoded = encoder.encode()?;
+            let parity_offset = plan.parity_offset() + parity_before * plan.shard_size;
+            for t in missing_parity {
+                let parity = encoded
+                    .recovery_iter()
+                    .nth(t)
+                    .ok_or_else(|| anyhow::anyhow!("не найден parity-кусок {}", t))?;
+                file.seek(SeekFrom::Start(parity_offset + t as u64 * plan.shard_size))?;
+                file.write_all(parity)?;
+                restored_parity += 1;
+            }
+        }
+    }
+
+    let total_len = plan
+        .total_len()
+        .ok_or_else(|| anyhow::anyhow!("размер записи переполнен"))?;
+    file.set_len(total_len)?;
+    let bytes = trailer.to_bytes();
+    let mut trailer_repaired = false;
+    let mut raw = [0u8; TRAILER_LEN as usize];
+    if source.read_exact_at(&mut raw, plan.protected_len).is_err()
+        || Trailer::from_bytes(&raw).is_err()
+    {
+        file.seek(SeekFrom::Start(plan.protected_len))?;
+        file.write_all(&bytes)?;
+        trailer_repaired = true;
+    }
+    if source
+        .read_exact_at(&mut raw, plan.trailer_offset())
+        .is_err()
+        || Trailer::from_bytes(&raw).is_err()
+    {
+        file.seek(SeekFrom::Start(plan.trailer_offset()))?;
+        file.write_all(&bytes)?;
+        trailer_repaired = true;
+    }
+    file.sync_all()?;
+    progress.finish();
+
+    let check = FileSource::open(path)?;
+    let report = verify(&check, &trailer, false, None)?;
+    ensure!(
+        report.is_clean(),
+        "после восстановления архив всё ещё не проходит проверку"
+    );
+    Ok(RepairReport {
+        restored_data,
+        restored_parity,
+        repaired_trailers: trailer_repaired,
     })
 }
 

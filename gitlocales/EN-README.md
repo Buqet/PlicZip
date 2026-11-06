@@ -292,15 +292,16 @@ Principles in brief: the lightning bolt as a metaphor for the name, brass as the
 
 An honest list, so you don't go looking:
 
-- **recovery record** — a damaged sector can't be recovered (planned; this is a
-difference from 7z and zip);
+- **recovery record** — use `--recovery PERCENT` and `pliczip repair` to repair
+damage while enough parity remains;
 - **deduplication** — identical files are still stored separately, though the
 hashes for it already exist;
 - **stdin reading** — because of the index at the end;
 - **non-UTF-8 names** — a path that can't be represented as UTF-8 isn't archived;
 - **archive modification** — files can't be added to or removed from a
 finished archive (the "Modify" button in the GUI is empty for now);
-- **Explorer integration** — `.plz` association and context menu are not there yet;
+- **Explorer integration** — available on Windows through the GUI's
+`--install-context-menu` command;
 - **archive digital signature**;
 - **name-only encryption** without encrypting data — deliberately not done: it
 creates a false sense of protection.
@@ -358,3 +359,26 @@ ar.extract(&ExtractOptions { output: dir, ..Default::default() })?;
 ```
 
 License: MIT OR Apache-2.0.
+
+## Keyfiles, repair, and update checks
+
+Create a binary keyfile and use it for encrypted archives:
+
+```text
+pliczip keygen archive.key --bytes 32
+pliczip a secret.plz ./docs --keyfile archive.key
+pliczip x secret.plz -o ./out --keyfile archive.key
+```
+
+`--keyfile` is encoding-independent and cannot be combined with `--password-file`. Keep the keyfile separate and do not lose it.
+
+Archives created with `--recovery 10%` can be checked and repaired:
+
+```text
+pliczip t backup.plz
+pliczip repair backup.plz
+```
+
+`repair` changes an archive only after validating the recovery hash table and fails when parity is insufficient. Check for a newer release without opening GitHub manually with `pliczip update` or `pliczip update --json`; it only reads the GitHub API and never downloads or executes files automatically.
+
+The fuzz target uses nightly Rust: `rustup toolchain install nightly && RUSTUP_TOOLCHAIN=nightly cargo fuzz run paths -- -max_total_time=60`.

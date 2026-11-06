@@ -27,13 +27,9 @@ impl ProgressSink for ChannelSink {
 /// Итог работы рабочего потока.
 pub enum Done {
     /// Распаковка.
-    Extract {
-        stats: Result<ExtractStats, String>,
-    },
+    Extract { stats: Result<ExtractStats, String> },
     /// Проверка целостности.
-    Test {
-        report: Result<TestReport, String>,
-    },
+    Test { report: Result<TestReport, String> },
     /// Создание архива.
     Create {
         path: std::path::PathBuf,

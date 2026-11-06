@@ -17,6 +17,7 @@ use pliczip::util::{
     saved_percent,
 };
 use pliczip::{crypto, reader, util, writer};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
@@ -103,6 +104,10 @@ enum Cmd {
         #[arg(long = "password-file", value_name = "ПУТЬ")]
         password_file: Option<PathBuf>,
 
+        /// Взять ключ из бинарного файла (содержимое файла становится ключом).
+        #[arg(long = "keyfile", value_name = "ПУТЬ")]
+        keyfile: Option<PathBuf>,
+
         /// Размер тома: архив разобьётся на файлы .001, .002, …
         #[arg(long = "volume-size", value_name = "РАЗМЕР", value_parser = parse_size)]
         volume_size: Option<u64>,
@@ -142,6 +147,10 @@ enum Cmd {
         /// Взять пароль из первой строки файла.
         #[arg(long = "password-file", value_name = "ПУТЬ")]
         password_file: Option<PathBuf>,
+
+        /// Взять ключ из бинарного файла.
+        #[arg(long = "keyfile", value_name = "ПУТЬ")]
+        keyfile: Option<PathBuf>,
 
         /// Не перезаписывать уже существующие файлы.
         #[arg(long)]
@@ -183,6 +192,10 @@ enum Cmd {
         #[arg(long = "password-file", value_name = "ПУТЬ")]
         password_file: Option<PathBuf>,
 
+        /// Взять ключ из бинарного файла.
+        #[arg(long = "keyfile", value_name = "ПУТЬ")]
+        keyfile: Option<PathBuf>,
+
         /// Подробный список: метод, дата, степень сжатия.
         #[arg(short, long)]
         long: bool,
@@ -206,6 +219,10 @@ enum Cmd {
         /// Взять пароль из первой строки файла.
         #[arg(long = "password-file", value_name = "ПУТЬ")]
         password_file: Option<PathBuf>,
+
+        /// Взять ключ из бинарного файла.
+        #[arg(long = "keyfile", value_name = "ПУТЬ")]
+        keyfile: Option<PathBuf>,
 
         /// Максимально допустимая степень сжатия блока (0 — без ограничения).
         #[arg(long, value_name = "N", default_value_t = 100_000)]
@@ -231,9 +248,40 @@ enum Cmd {
         #[arg(long = "password-file", value_name = "ПУТЬ")]
         password_file: Option<PathBuf>,
 
+        /// Взять ключ из бинарного файла.
+        #[arg(long = "keyfile", value_name = "ПУТЬ")]
+        keyfile: Option<PathBuf>,
+
         /// Вывести машинночитаемый JSON.
         #[arg(long)]
         json: bool,
+    },
+
+    /// Восстановить повреждённый архив по записи parity.
+    Repair {
+        /// Путь к архиву с записью восстановления.
+        #[arg(value_name = "АРХИВ")]
+        archive: PathBuf,
+        /// Вывести машинночитаемый JSON.
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Проверить наличие новой версии на GitHub.
+    Update {
+        /// Вывести машинночитаемый JSON.
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Создать случайный бинарный keyfile.
+    Keygen {
+        /// Куда сохранить ключ.
+        #[arg(value_name = "ПУТЬ")]
+        path: PathBuf,
+        /// Размер ключа в байтах.
+        #[arg(long, default_value_t = 32, value_parser = parse_key_bytes)]
+        bytes: usize,
     },
 }
 
@@ -264,6 +312,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             follow_links,
             password,
             password_file,
+            keyfile,
             volume_size,
             recovery,
             include,
@@ -271,7 +320,11 @@ fn run(cli: Cli) -> Result<ExitCode> {
             json,
         } => {
             let started = Instant::now();
-            let secret = password_for_create(password.as_deref(), password_file.as_deref())?;
+            let secret = password_for_create(
+                password.as_deref(),
+                password_file.as_deref(),
+                keyfile.as_deref(),
+            )?;
             let encrypted = secret.is_some();
 
             let opts = CreateOptions {
@@ -333,7 +386,11 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     } else {
                         String::new()
                     },
-                    if encrypted { " · зашифрован" } else { "" }
+                    if encrypted {
+                        " · зашифрован"
+                    } else {
+                        ""
+                    }
                 );
                 if let Some(percent) = recovery {
                     println!(
@@ -356,6 +413,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             output,
             password,
             password_file,
+            keyfile,
             skip_existing,
             no_verify,
             no_symlinks,
@@ -364,7 +422,11 @@ fn run(cli: Cli) -> Result<ExitCode> {
             json,
         } => {
             let started = Instant::now();
-            let secret = password_for_open(password.as_deref(), password_file.as_deref())?;
+            let secret = password_for_open(
+                password.as_deref(),
+                password_file.as_deref(),
+                keyfile.as_deref(),
+            )?;
             let mut ar = Archive::open_with(&archive, secret.as_deref().map(String::as_str))?;
             let opts = reader::ExtractOptions {
                 output,
@@ -410,10 +472,15 @@ fn run(cli: Cli) -> Result<ExitCode> {
             archive,
             password,
             password_file,
+            keyfile,
             long,
             json,
         } => {
-            let secret = password_for_open(password.as_deref(), password_file.as_deref())?;
+            let secret = password_for_open(
+                password.as_deref(),
+                password_file.as_deref(),
+                keyfile.as_deref(),
+            )?;
             let ar = Archive::open_with(&archive, secret.as_deref().map(String::as_str))?;
             let (files, dirs, links) = ar.index.counts();
 
@@ -487,11 +554,16 @@ fn run(cli: Cli) -> Result<ExitCode> {
             archive,
             password,
             password_file,
+            keyfile,
             max_ratio,
             json,
         } => {
             let started = Instant::now();
-            let secret = password_for_open(password.as_deref(), password_file.as_deref())?;
+            let secret = password_for_open(
+                password.as_deref(),
+                password_file.as_deref(),
+                keyfile.as_deref(),
+            )?;
             let mut ar = Archive::open_with(&archive, secret.as_deref().map(String::as_str))?;
             let rr_report = ar.verify_recovery(!quiet && !json)?;
             let rr_clean = rr_report.as_ref().is_none_or(|report| report.is_clean());
@@ -551,9 +623,14 @@ fn run(cli: Cli) -> Result<ExitCode> {
             archive,
             password,
             password_file,
+            keyfile,
             json,
         } => {
-            let secret = password_for_open(password.as_deref(), password_file.as_deref())?;
+            let secret = password_for_open(
+                password.as_deref(),
+                password_file.as_deref(),
+                keyfile.as_deref(),
+            )?;
             let ar = Archive::open_with(&archive, secret.as_deref().map(String::as_str))?;
             let index = &ar.index;
             let (files, dirs, links) = index.counts();
@@ -621,7 +698,11 @@ fn run(cli: Cli) -> Result<ExitCode> {
             }
             println!(
                 "Режим:      {}",
-                if index.solid { "solid" } else { "обычный" }
+                if index.solid {
+                    "solid"
+                } else {
+                    "обычный"
+                }
             );
             println!(
                 "Содержимое: {}: {}, {}, {}",
@@ -665,6 +746,75 @@ fn run(cli: Cli) -> Result<ExitCode> {
             }
             Ok(ExitCode::SUCCESS)
         }
+
+        Cmd::Repair { archive, json } => {
+            let report = pliczip::recovery::repair_file(&archive, !quiet && !json)?;
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "ok": true,
+                        "restored_data": report.restored_data,
+                        "restored_parity": report.restored_parity,
+                        "repaired_trailers": report.repaired_trailers,
+                    }))?
+                );
+            } else if !quiet {
+                println!(
+                    "PlicZip: восстановлено data-кусков: {}, parity-кусков: {}, трейлеры: {}",
+                    report.restored_data,
+                    report.restored_parity,
+                    if report.repaired_trailers {
+                        "исправлены"
+                    } else {
+                        "целы"
+                    }
+                );
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Update { json } => {
+            let release = pliczip::update::check_latest()?;
+            let available = release.latest != format!("v{}", release.current)
+                && release.latest != release.current;
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "ok": true,
+                        "current": release.current,
+                        "latest": release.latest,
+                        "update_available": available,
+                        "url": release.url,
+                    }))?
+                );
+            } else if available {
+                println!("Доступно обновление PlicZip: {}", release.latest);
+                println!("Скачать: {}", release.url);
+            } else {
+                println!(
+                    "Установлена актуальная версия PlicZip ({})",
+                    release.current
+                );
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Keygen { path, bytes } => {
+            let mut key = vec![0u8; bytes];
+            getrandom::getrandom(&mut key)
+                .map_err(|err| anyhow::anyhow!("не удалось создать случайный keyfile: {err}"))?;
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)
+                .with_context(|| format!("не удалось создать keyfile {:?}", path))?
+                .write_all(&key)
+                .with_context(|| format!("не удалось записать keyfile {:?}", path))?;
+            println!("Создан keyfile {} ({} байт)", path.display(), bytes);
+            Ok(ExitCode::SUCCESS)
+        }
     }
 }
 
@@ -681,6 +831,16 @@ fn parse_percent(text: &str) -> Result<u32, String> {
             range.start(),
             range.end()
         ));
+    }
+    Ok(value)
+}
+
+fn parse_key_bytes(text: &str) -> Result<usize, String> {
+    let value: usize = text
+        .parse()
+        .map_err(|_| format!("ожидалось число байт, получено {:?}", text))?;
+    if !(16..=4096).contains(&value) {
+        return Err("размер keyfile должен быть от 16 до 4096 байт".into());
     }
     Ok(value)
 }
@@ -739,7 +899,7 @@ fn print_recovery_report(report: &pliczip::recovery::VerifyReport, quiet: bool) 
         );
     }
     if report.recoverable() {
-        eprintln!("  parity хватает, чтобы восстановить архив (команда восстановления — в следующей версии)");
+        eprintln!("  parity хватает: запустите `pliczip repair` для восстановления");
     } else {
         eprintln!("  parity не хватает, чтобы восстановить все повреждённые куски");
     }
@@ -761,6 +921,16 @@ fn password_from_file(path: &Path) -> Result<Zeroizing<String>> {
     Ok(Zeroizing::new(line))
 }
 
+/// Читает произвольный бинарный keyfile и кодирует его без потери байтов.
+fn password_from_keyfile(path: &Path) -> Result<Zeroizing<String>> {
+    let bytes =
+        std::fs::read(path).with_context(|| format!("не удалось прочитать keyfile {:?}", path))?;
+    if bytes.is_empty() {
+        bail!("keyfile {:?} пуст", path);
+    }
+    Ok(Zeroizing::new(hex(&bytes)))
+}
+
 fn password_from_env() -> Option<Zeroizing<String>> {
     match std::env::var(PASSWORD_ENV) {
         Ok(value) if !value.is_empty() => Some(Zeroizing::new(value)),
@@ -774,7 +944,14 @@ fn password_from_env() -> Option<Zeroizing<String>> {
 fn password_for_create(
     value: Option<&str>,
     file: Option<&Path>,
+    keyfile: Option<&Path>,
 ) -> Result<Option<Zeroizing<String>>> {
+    if file.is_some() && keyfile.is_some() {
+        bail!("нельзя одновременно указывать --password-file и --keyfile");
+    }
+    if let Some(path) = keyfile {
+        return Ok(Some(password_from_keyfile(path)?));
+    }
     if let Some(path) = file {
         return Ok(Some(password_from_file(path)?));
     }
@@ -788,7 +965,17 @@ fn password_for_create(
 }
 
 /// Пароль для чтения архива. `None` — пусть `Archive` спросит, если потребуется.
-fn password_for_open(value: Option<&str>, file: Option<&Path>) -> Result<Option<Zeroizing<String>>> {
+fn password_for_open(
+    value: Option<&str>,
+    file: Option<&Path>,
+    keyfile: Option<&Path>,
+) -> Result<Option<Zeroizing<String>>> {
+    if file.is_some() && keyfile.is_some() {
+        bail!("нельзя одновременно указывать --password-file и --keyfile");
+    }
+    if let Some(path) = keyfile {
+        return Ok(Some(password_from_keyfile(path)?));
+    }
     if let Some(path) = file {
         return Ok(Some(password_from_file(path)?));
     }

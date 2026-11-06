@@ -58,11 +58,18 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
         ModalKind::None => {}
         ModalKind::Create => {
             let mut request = CreateRequest::None;
-            dialog(ctx, "Создать архив", Icon::Plus, p.accent, p, |ui| {
+            dialog(
+                ctx,
+                "Создать архив",
+                Icon::Plus,
+                p.accent,
+                p,
+                |ui| {
                     if let Modal::Create(dlg) = &mut app.modal {
                         request = create_dialog(ui, dlg, p);
                     }
-                });
+                },
+            );
             if escape {
                 request = CreateRequest::Cancel;
             }
@@ -87,11 +94,18 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
         ModalKind::Extract => {
             let mut submit = false;
             let mut cancel = false;
-            dialog(ctx, "Распаковать архив", Icon::Extract, p.accent, p, |ui| {
+            dialog(
+                ctx,
+                "Распаковать архив",
+                Icon::Extract,
+                p.accent,
+                p,
+                |ui| {
                     if let Modal::Extract(dlg) = &mut app.modal {
                         extract_dialog(ui, dlg, p, &mut submit, &mut cancel);
                     }
-                });
+                },
+            );
             if submit {
                 let output = match &mut app.modal {
                     Modal::Extract(dlg) => std::path::PathBuf::from(dlg.output.trim().to_string()),
@@ -112,11 +126,18 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
         ModalKind::Password => {
             let mut submit = false;
             let mut cancel = false;
-            dialog(ctx, "Пароль архива", Icon::Lock, p.accent, p, |ui| {
+            dialog(
+                ctx,
+                "Пароль архива",
+                Icon::Lock,
+                p.accent,
+                p,
+                |ui| {
                     if let Modal::Password(dlg) = &mut app.modal {
                         password_dialog(ui, dlg, p, &mut submit, &mut cancel);
                     }
-                });
+                },
+            );
             if submit {
                 let (path, password) = match &mut app.modal {
                     Modal::Password(dlg) => (dlg.path.clone(), dlg.password.clone()),
@@ -145,24 +166,30 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
             };
             let mut close = false;
             dialog(ctx, title, Icon::Cross, p.err, p, |ui| {
-                    ui.set_max_width(460.0);
-                    ui.label(egui::RichText::new(&message).color(p.text));
-                    if !hint.is_empty() {
-                        ui.add_space(8.0);
-                        ui.label(egui::RichText::new(&hint).color(p.muted));
-                    }
-                    ui.add_space(12.0);
-                    if primary_button(ui, "Закрыть", p).clicked() {
-                        close = true;
-                    }
-                });
+                ui.set_max_width(460.0);
+                ui.label(egui::RichText::new(&message).color(p.text));
+                if !hint.is_empty() {
+                    ui.add_space(8.0);
+                    ui.label(egui::RichText::new(&hint).color(p.muted));
+                }
+                ui.add_space(12.0);
+                if primary_button(ui, "Закрыть", p).clicked() {
+                    close = true;
+                }
+            });
             if close || escape {
                 app.modal = Modal::None;
             }
         }
         ModalKind::About => {
             let mut close = false;
-            dialog(ctx, "О программе", Icon::Archive, p.accent, p, |ui| {
+            dialog(
+                ctx,
+                "О программе",
+                Icon::Archive,
+                p.accent,
+                p,
+                |ui| {
                     ui.set_max_width(420.0);
                     ui.label(egui::RichText::new("PlicZip").size(24.0).color(p.accent));
                     ui.add_space(6.0);
@@ -183,7 +210,8 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
                     if primary_button(ui, "Закрыть", p).clicked() {
                         close = true;
                     }
-                });
+                },
+            );
             if close || escape {
                 app.modal = Modal::None;
             }
@@ -229,8 +257,16 @@ fn create_dialog(ui: &mut egui::Ui, dlg: &mut CreateDlg, p: Palette) -> CreateRe
                     ui.add_space(6.0);
                     widgets::icon(ui, Icon::Folder, 28.0, p.accent);
                     ui.add_space(4.0);
-                    ui.label(egui::RichText::new("Перетащите файлы или папки сюда").strong().color(p.text));
-                    ui.label(egui::RichText::new("или выберите их на диске кнопкой ниже").size(12.0).color(p.muted));
+                    ui.label(
+                        egui::RichText::new("Перетащите файлы или папки сюда")
+                            .strong()
+                            .color(p.text),
+                    );
+                    ui.label(
+                        egui::RichText::new("или выберите их на диске кнопкой ниже")
+                            .size(12.0)
+                            .color(p.muted),
+                    );
                     ui.add_space(6.0);
                 });
             } else {
@@ -241,31 +277,39 @@ fn create_dialog(ui: &mut egui::Ui, dlg: &mut CreateDlg, p: Palette) -> CreateRe
                     ))
                     .color(p.muted),
                 );
-                egui::ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
-                    for i in (0..dlg.sources.len()).rev() {
-                        let path = dlg.sources[i].clone();
-                        ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new(path.display().to_string()).color(p.text));
-                            if widgets::button(ui, Some(Icon::Close), "", Btn::Ghost, true)
-                                .on_hover_text("Убрать из списка")
-                                .clicked()
-                            {
-                                dlg.sources.remove(i);
-                            }
-                        });
-                    }
-                });
+                egui::ScrollArea::vertical()
+                    .max_height(120.0)
+                    .show(ui, |ui| {
+                        for i in (0..dlg.sources.len()).rev() {
+                            let path = dlg.sources[i].clone();
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new(path.display().to_string()).color(p.text),
+                                );
+                                if widgets::button(ui, Some(Icon::Close), "", Btn::Ghost, true)
+                                    .on_hover_text("Убрать из списка")
+                                    .clicked()
+                                {
+                                    dlg.sources.remove(i);
+                                }
+                            });
+                        }
+                    });
             }
         });
     widgets::dashed_rect(
         ui.painter(),
         zone.response.rect,
         12.0,
-        Stroke::new(1.2, mix(p.line, p.accent, if hovering { 1.0 } else { 0.35 })),
+        Stroke::new(
+            1.2,
+            mix(p.line, p.accent, if hovering { 1.0 } else { 0.35 }),
+        ),
     );
 
     ui.add_space(10.0);
-    if widgets::button(ui, Some(Icon::Plus), "Выбрать на диске…", Btn::Normal, true).clicked() {
+    if widgets::button(ui, Some(Icon::Plus), "Выбрать на диске…", Btn::Normal, true).clicked()
+    {
         if let Some(picked) = rfd::FileDialog::new().pick_files() {
             for path in picked {
                 if !dlg.sources.contains(&path) {
@@ -357,7 +401,11 @@ fn create_dialog(ui: &mut egui::Ui, dlg: &mut CreateDlg, p: Palette) -> CreateRe
                 .hint_text("например 700M")
                 .desired_width(120.0),
         );
-        ui.label(egui::RichText::new("— пусто: один файл").size(11.5).color(p.dim));
+        ui.label(
+            egui::RichText::new("— пусто: один файл")
+                .size(11.5)
+                .color(p.dim),
+        );
     });
 
     ui.add_space(8.0);
@@ -431,9 +479,7 @@ fn password_dialog(
     cancel: &mut bool,
 ) {
     ui.set_min_width(360.0);
-    ui.label(
-        egui::RichText::new(format!("Архив {}", dlg.path.display())).color(p.muted),
-    );
+    ui.label(egui::RichText::new(format!("Архив {}", dlg.path.display())).color(p.muted));
     ui.add_space(8.0);
     ui.add(
         egui::TextEdit::singleline(&mut dlg.password)
@@ -472,7 +518,15 @@ fn progress_window(ctx: &egui::Context, op: &crate::progress::OpState, p: Palett
             let (rect, _) = ui.allocate_exact_size(vec2(150.0, 150.0), Sense::hover());
             let painter = ui.painter();
             let frac = (percent / 100.0) as f32;
-            widgets::ring(painter, rect.center(), 62.0, 10.0, frac, mix(p.panel, p.text, 0.08), p.accent);
+            widgets::ring(
+                painter,
+                rect.center(),
+                62.0,
+                10.0,
+                frac,
+                mix(p.panel, p.text, 0.08),
+                p.accent,
+            );
             // Бегущая точка, пока объём ещё неизвестен.
             if op.total == 0 {
                 let t = ui.input(|i| i.time) as f32;
@@ -488,7 +542,11 @@ fn progress_window(ctx: &egui::Context, op: &crate::progress::OpState, p: Palett
                 p.text,
             );
             let done = pliczip::util::human_bytes(op.done);
-            let total = if op.total > 0 { pliczip::util::human_bytes(op.total) } else { "?".into() };
+            let total = if op.total > 0 {
+                pliczip::util::human_bytes(op.total)
+            } else {
+                "?".into()
+            };
             painter.text(
                 rect.center() + vec2(0.0, 26.0),
                 Align2::CENTER_CENTER,

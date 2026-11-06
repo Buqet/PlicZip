@@ -282,14 +282,24 @@ impl Sink {
 /// архива и так не поддерживается — обе сессии сойдутся на одном rename.
 fn sweep_stale_temps(base: &Path) {
     let Some(parent) = base.parent() else { return };
-    let Some(name) = base.file_name().and_then(|n| n.to_str()) else { return };
-    let Ok(entries) = std::fs::read_dir(parent) else { return };
+    let Some(name) = base.file_name().and_then(|n| n.to_str()) else {
+        return;
+    };
+    let Ok(entries) = std::fs::read_dir(parent) else {
+        return;
+    };
     for entry in entries.flatten() {
         let file_name = entry.file_name();
-        let Some(text) = file_name.to_str() else { continue };
+        let Some(text) = file_name.to_str() else {
+            continue;
+        };
         // `{name}.tmp…` или `{name}.NNN.tmp…`, хвост — только pid (цифры)
-        let Some(after_name) = text.strip_prefix(name) else { continue };
-        let Some(tmp_pos) = after_name.find(".tmp") else { continue };
+        let Some(after_name) = text.strip_prefix(name) else {
+            continue;
+        };
+        let Some(tmp_pos) = after_name.find(".tmp") else {
+            continue;
+        };
         let pid_part = &after_name[tmp_pos + 4..];
         if !pid_part.is_empty() && pid_part.bytes().all(|b| b.is_ascii_digit()) {
             let _ = std::fs::remove_file(safety::native_path(&entry.path()));
@@ -534,8 +544,8 @@ fn build_mem_block(
 
     for &i in idxs {
         let cand = &cands[i];
-        let file =
-            File::open(safety::native_path(&cand.abs)).with_context(|| format!("не удалось открыть {:?}", cand.abs))?;
+        let file = File::open(safety::native_path(&cand.abs))
+            .with_context(|| format!("не удалось открыть {:?}", cand.abs))?;
         let mut reader = BufReader::with_capacity(CHUNK, file);
         let before = buf.len();
         let read = reader
@@ -574,7 +584,8 @@ fn compress_file_into<W: Write>(
     method: Method,
     level: i32,
 ) -> Result<([u8; 32], u64)> {
-    let file = File::open(safety::native_path(path)).with_context(|| format!("не удалось открыть {:?}", path))?;
+    let file = File::open(safety::native_path(path))
+        .with_context(|| format!("не удалось открыть {:?}", path))?;
     let mut reader = HashingReader::new(BufReader::with_capacity(CHUNK, file));
     compress::compress_stream(method, level, &mut reader, out)
         .with_context(|| format!("ошибка сжатия {:?}", path))?;

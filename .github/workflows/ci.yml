@@ -9,6 +9,22 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  quality:
+    name: Проверки качества
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Форматирование
+        run: cargo fmt --all -- --check
+      - name: Аудит зависимостей
+        uses: actions-rust-lang/audit@v1
+      - name: Тесты всего workspace
+        run: cargo test --workspace
+
   test:
     name: Тесты (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -22,7 +38,7 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Clippy
-        run: cargo clippy -p pliczip --all-targets -- -D warnings
-      - name: Тесты
-        run: cargo test -p pliczip
+      - name: Clippy всего workspace
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Тесты всего workspace
+        run: cargo test --workspace

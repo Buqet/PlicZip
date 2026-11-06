@@ -76,6 +76,8 @@ jobs:
             libxcb-xfixes0-dev libxkbcommon-dev libgtk-3-dev
 
       - name: Сборка
+        env:
+          PLICZIP_RELEASE_TAG: ${{ env.TAG }}
         run: cargo build --release --locked --target ${{ matrix.target }} -p pliczip -p pliczip-gui
 
       - name: Упаковка

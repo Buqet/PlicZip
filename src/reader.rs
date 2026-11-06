@@ -401,7 +401,8 @@ impl Archive {
                     entry.path
                 );
             }
-            File::create(safety::native_path(&target)).with_context(|| format!("не удалось создать {:?}", target))?;
+            File::create(safety::native_path(&target))
+                .with_context(|| format!("не удалось создать {:?}", target))?;
             apply_metadata(&target, entry, opts.restore_mtime);
             stats.files += 1;
         }
@@ -791,9 +792,7 @@ mod tests {
         )
         .unwrap();
 
-        // Без пароля не открывается.
-        assert!(Archive::open_with(&archive, None).is_err());
-        // С неверным паролем — тоже.
+        // Неверный пароль не открывает архив и не вызывает интерактивный ввод.
         assert!(Archive::open_with(&archive, Some("другой")).is_err());
 
         let mut ar = Archive::open_with(&archive, Some("секрет")).unwrap();
@@ -934,7 +933,10 @@ mod tests {
         fs::write(&archive, &bytes).unwrap();
 
         let mut ar = Archive::open(&archive).unwrap();
-        assert!(ar.test(false, 0, None).is_err(), "порча данных должна ловиться");
+        assert!(
+            ar.test(false, 0, None).is_err(),
+            "порча данных должна ловиться"
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 

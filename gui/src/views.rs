@@ -28,20 +28,33 @@ pub fn menu_bar(app: &mut App, ui: &mut egui::Ui) {
     let busy = app.op.is_some();
     egui::Panel::top("menu")
         .exact_size(26.0)
-        .frame(egui::Frame::new().fill(p.panel2).inner_margin(egui::Margin::symmetric(6, 0)))
+        .frame(
+            egui::Frame::new()
+                .fill(p.panel2)
+                .inner_margin(egui::Margin::symmetric(6, 0)),
+        )
         .show(ui, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 egui::menu::MenuButton::new("Файл").ui(ui, |ui| {
-                    if ui.add_enabled(!busy, egui::Button::new("Открыть архив…    Ctrl+O")).clicked() {
+                    if ui
+                        .add_enabled(!busy, egui::Button::new("Открыть архив…    Ctrl+O"))
+                        .clicked()
+                    {
                         ui.close();
                         app.pick_and_open();
                     }
-                    if ui.add_enabled(!busy, egui::Button::new("Создать архив…    Ctrl+N")).clicked() {
+                    if ui
+                        .add_enabled(!busy, egui::Button::new("Создать архив…    Ctrl+N"))
+                        .clicked()
+                    {
                         ui.close();
                         app.modal = Modal::Create(CreateDlg::from_sources(Vec::new()));
                     }
                     if ui
-                        .add_enabled(!busy && app.loaded.is_some(), egui::Button::new("Закрыть архив"))
+                        .add_enabled(
+                            !busy && app.loaded.is_some(),
+                            egui::Button::new("Закрыть архив"),
+                        )
                         .clicked()
                     {
                         ui.close();
@@ -56,15 +69,24 @@ pub fn menu_bar(app: &mut App, ui: &mut egui::Ui) {
 
                 egui::menu::MenuButton::new("Архив").ui(ui, |ui| {
                     let ready = !busy && app.loaded.is_some();
-                    if ui.add_enabled(ready, egui::Button::new("Распаковать…    Ctrl+E")).clicked() {
+                    if ui
+                        .add_enabled(ready, egui::Button::new("Распаковать…    Ctrl+E"))
+                        .clicked()
+                    {
                         ui.close();
                         app.open_extract_dialog();
                     }
-                    if ui.add_enabled(ready, egui::Button::new("Проверить целостность    Ctrl+T")).clicked() {
+                    if ui
+                        .add_enabled(ready, egui::Button::new("Проверить целостность    Ctrl+T"))
+                        .clicked()
+                    {
                         ui.close();
                         app.spawn_test();
                     }
-                    if ui.add_enabled(app.loaded.is_some(), egui::Button::new("Найти…    Ctrl+F")).clicked() {
+                    if ui
+                        .add_enabled(app.loaded.is_some(), egui::Button::new("Найти…    Ctrl+F"))
+                        .clicked()
+                    {
                         ui.close();
                         app.focus_search = true;
                     }
@@ -133,25 +155,43 @@ pub fn toolbar(app: &mut App, ui: &mut egui::Ui, busy: bool) {
 
                 // Тонкий разделитель групп.
                 let (r, _) = ui.allocate_exact_size(vec2(9.0, 24.0), Sense::hover());
-                ui.painter()
-                    .line_segment([r.center_top(), r.center_bottom()], Stroke::new(1.0, p.line));
+                ui.painter().line_segment(
+                    [r.center_top(), r.center_bottom()],
+                    Stroke::new(1.0, p.line),
+                );
 
-                if widgets::button(ui, Some(Icon::Extract), "Распаковать", Btn::Normal, has && !busy)
-                    .on_hover_text("Ctrl+E")
-                    .clicked()
+                if widgets::button(
+                    ui,
+                    Some(Icon::Extract),
+                    "Распаковать",
+                    Btn::Normal,
+                    has && !busy,
+                )
+                .on_hover_text("Ctrl+E")
+                .clicked()
                 {
                     app.open_extract_dialog();
                 }
-                if widgets::button(ui, Some(Icon::Shield), "Проверить", Btn::Normal, has && !busy)
-                    .on_hover_text("Сверить BLAKE3 всех файлов и блоков · Ctrl+T")
-                    .clicked()
+                if widgets::button(
+                    ui,
+                    Some(Icon::Shield),
+                    "Проверить",
+                    Btn::Normal,
+                    has && !busy,
+                )
+                .on_hover_text("Сверить BLAKE3 всех файлов и блоков · Ctrl+T")
+                .clicked()
                 {
                     app.spawn_test();
                 }
 
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     let theme_icon = if app.cfg.dark { Icon::Sun } else { Icon::Moon };
-                    let hint = if app.cfg.dark { "Светлая тема" } else { "Тёмная тема" };
+                    let hint = if app.cfg.dark {
+                        "Светлая тема"
+                    } else {
+                        "Тёмная тема"
+                    };
                     if widgets::button(ui, Some(theme_icon), "", Btn::Ghost, true)
                         .on_hover_text(hint)
                         .clicked()
@@ -169,7 +209,9 @@ pub fn toolbar(app: &mut App, ui: &mut egui::Ui, busy: bool) {
 
 /// Поле поиска с иконкой.
 fn search_box(app: &mut App, ui: &mut egui::Ui, p: Palette) {
-    let Some(loaded) = &mut app.loaded else { return };
+    let Some(loaded) = &mut app.loaded else {
+        return;
+    };
     let focus = std::mem::take(&mut app.focus_search);
     egui::Frame::new()
         .fill(p.bg)
@@ -177,30 +219,38 @@ fn search_box(app: &mut App, ui: &mut egui::Ui, p: Palette) {
         .stroke(Stroke::new(1.0, p.line))
         .inner_margin(egui::Margin::symmetric(10, 5))
         .show(ui, |ui| {
-            ui.allocate_ui_with_layout(vec2(262.0, 22.0), Layout::left_to_right(Align::Center), |ui| {
-                ui.spacing_mut().item_spacing.x = 6.0;
-                widgets::icon(ui, Icon::Search, 14.0, p.dim);
-                let width = if loaded.filter.is_empty() { 230.0 } else { 196.0 };
-                let resp = ui.add(
-                    egui::TextEdit::singleline(&mut loaded.filter)
-                        .id_salt("archive_search")
-                        .frame(egui::Frame::NONE)
-                        .hint_text("Поиск по архиву   Ctrl+F")
-                        .align(egui::Align2::LEFT_CENTER)
-                        .desired_width(width),
-                );
-                if focus {
-                    resp.request_focus();
-                }
-                if !loaded.filter.is_empty() {
-                    let (r, resp) = ui.allocate_exact_size(vec2(18.0, 18.0), Sense::click());
-                    let color = if resp.hovered() { p.text } else { p.dim };
-                    widgets::paint_icon(ui.painter(), r.shrink(3.0), Icon::Close, color, p.bg);
-                    if resp.on_hover_cursor(CursorIcon::PointingHand).clicked() {
-                        loaded.filter.clear();
+            ui.allocate_ui_with_layout(
+                vec2(262.0, 22.0),
+                Layout::left_to_right(Align::Center),
+                |ui| {
+                    ui.spacing_mut().item_spacing.x = 6.0;
+                    widgets::icon(ui, Icon::Search, 14.0, p.dim);
+                    let width = if loaded.filter.is_empty() {
+                        230.0
+                    } else {
+                        196.0
+                    };
+                    let resp = ui.add(
+                        egui::TextEdit::singleline(&mut loaded.filter)
+                            .id_salt("archive_search")
+                            .frame(egui::Frame::NONE)
+                            .hint_text("Поиск по архиву   Ctrl+F")
+                            .align(egui::Align2::LEFT_CENTER)
+                            .desired_width(width),
+                    );
+                    if focus {
+                        resp.request_focus();
                     }
-                }
-            });
+                    if !loaded.filter.is_empty() {
+                        let (r, resp) = ui.allocate_exact_size(vec2(18.0, 18.0), Sense::click());
+                        let color = if resp.hovered() { p.text } else { p.dim };
+                        widgets::paint_icon(ui.painter(), r.shrink(3.0), Icon::Close, color, p.bg);
+                        if resp.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                            loaded.filter.clear();
+                        }
+                    }
+                },
+            );
         });
 }
 
@@ -209,11 +259,12 @@ pub fn archive_header(app: &mut App, ui: &mut egui::Ui, p: Palette) {
     let Some(loaded) = &app.loaded else { return };
     egui::Panel::top("archive_header")
         .exact_size(78.0)
-        .frame(
-            egui::Frame::new()
-                .fill(p.bg)
-                .inner_margin(egui::Margin { left: 18, right: 18, top: 14, bottom: 6 }),
-        )
+        .frame(egui::Frame::new().fill(p.bg).inner_margin(egui::Margin {
+            left: 18,
+            right: 18,
+            top: 14,
+            bottom: 6,
+        }))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 // Плитка с иконкой архива.
@@ -226,7 +277,13 @@ pub fn archive_header(app: &mut App, ui: &mut egui::Ui, p: Palette) {
                     Stroke::new(1.0, p.accent.gamma_multiply(0.4)),
                     StrokeKind::Inside,
                 );
-                widgets::paint_icon(ui.painter(), tile.shrink(12.0), Icon::Archive, p.accent, tile_fill);
+                widgets::paint_icon(
+                    ui.painter(),
+                    tile.shrink(12.0),
+                    Icon::Archive,
+                    p.accent,
+                    tile_fill,
+                );
                 ui.add_space(6.0);
 
                 ui.vertical(|ui| {
@@ -237,10 +294,15 @@ pub fn archive_header(app: &mut App, ui: &mut egui::Ui, p: Palette) {
                         .map(|n| n.to_string_lossy().into_owned())
                         .unwrap_or_default();
                     ui.label(egui::RichText::new(name).size(19.0).strong().color(p.text));
-                    let full = std::path::absolute(&loaded.path).unwrap_or_else(|_| loaded.path.clone());
-                    let dir = full.parent().map(|d| d.display().to_string()).unwrap_or_default();
+                    let full =
+                        std::path::absolute(&loaded.path).unwrap_or_else(|_| loaded.path.clone());
+                    let dir = full
+                        .parent()
+                        .map(|d| d.display().to_string())
+                        .unwrap_or_default();
                     ui.add(
-                        egui::Label::new(egui::RichText::new(dir).size(12.0).color(p.dim)).truncate(),
+                        egui::Label::new(egui::RichText::new(dir).size(12.0).color(p.dim))
+                            .truncate(),
                     );
                 });
 
@@ -263,7 +325,8 @@ pub fn archive_header(app: &mut App, ui: &mut egui::Ui, p: Palette) {
                     if index.solid {
                         widgets::chip(ui, None, "solid", p.muted);
                     }
-                    let mut methods: Vec<&str> = index.blocks.iter().map(|b| b.method.name()).collect();
+                    let mut methods: Vec<&str> =
+                        index.blocks.iter().map(|b| b.method.name()).collect();
                     methods.sort_unstable();
                     methods.dedup();
                     if !methods.is_empty() {
@@ -279,19 +342,22 @@ pub fn archive_header(app: &mut App, ui: &mut egui::Ui, p: Palette) {
 pub fn side_panel(app: &mut App, ui: &mut egui::Ui, p: Palette) {
     egui::Panel::right("summary")
         .exact_size(300.0)
-        .frame(
-            egui::Frame::new()
-                .fill(p.bg)
-                .inner_margin(egui::Margin { left: 0, right: 16, top: 6, bottom: 14 }),
-        )
+        .frame(egui::Frame::new().fill(p.bg).inner_margin(egui::Margin {
+            left: 0,
+            right: 16,
+            top: 6,
+            bottom: 14,
+        }))
         .show(ui, |ui| {
-            egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
-                ui.spacing_mut().item_spacing.y = 10.0;
-                compression_card(app, ui, p);
-                integrity_card(app, ui, p);
-                selection_card(app, ui, p);
-                archive_card(app, ui, p);
-            });
+            egui::ScrollArea::vertical()
+                .auto_shrink(false)
+                .show(ui, |ui| {
+                    ui.spacing_mut().item_spacing.y = 10.0;
+                    compression_card(app, ui, p);
+                    integrity_card(app, ui, p);
+                    selection_card(app, ui, p);
+                    archive_card(app, ui, p);
+                });
         });
 }
 
@@ -307,9 +373,11 @@ fn compression_card(app: &App, ui: &mut egui::Ui, p: Palette) {
         ui.add_space(4.0);
         ui.horizontal(|ui| {
             let (rect, _) = ui.allocate_exact_size(vec2(104.0, 104.0), Sense::hover());
-            let anim = ui
-                .ctx()
-                .animate_value_with_time(egui::Id::unique(("ring", &loaded.path)), saved as f32, 0.6);
+            let anim = ui.ctx().animate_value_with_time(
+                egui::Id::unique(("ring", &loaded.path)),
+                saved as f32,
+                0.6,
+            );
             let painter = ui.painter();
             widgets::ring(
                 painter,
@@ -344,16 +412,24 @@ fn compression_card(app: &App, ui: &mut egui::Ui, p: Palette) {
             });
         });
         // Полоса: какая доля исходного объёма осталась.
-        let frac = if raw == 0 { 0.0 } else { (stored as f64 / raw as f64).min(1.0) as f32 };
+        let frac = if raw == 0 {
+            0.0
+        } else {
+            (stored as f64 / raw as f64).min(1.0) as f32
+        };
         let (bar, _) = ui.allocate_exact_size(vec2(ui.available_width(), 6.0), Sense::hover());
-        ui.painter().rect_filled(bar, 3.0, mix(p.panel, p.text, 0.08));
+        ui.painter()
+            .rect_filled(bar, 3.0, mix(p.panel, p.text, 0.08));
         let mut fill = bar;
         fill.set_width((bar.width() * frac).max(6.0));
         ui.painter().rect_filled(fill, 3.0, p.accent);
         ui.label(
-            egui::RichText::new(format!("архив занимает {:.1}% исходного объёма", frac * 100.0))
-                .size(11.0)
-                .color(p.dim),
+            egui::RichText::new(format!(
+                "архив занимает {:.1}% исходного объёма",
+                frac * 100.0
+            ))
+            .size(11.0)
+            .color(p.dim),
         );
     });
 }
@@ -361,7 +437,12 @@ fn compression_card(app: &App, ui: &mut egui::Ui, p: Palette) {
 /// Подпись и крупное значение.
 fn stat(ui: &mut egui::Ui, key: &str, value: &str, p: Palette) {
     ui.label(egui::RichText::new(key).size(11.5).color(p.muted));
-    ui.label(egui::RichText::new(value).size(16.0).color(p.text).monospace());
+    ui.label(
+        egui::RichText::new(value)
+            .size(16.0)
+            .color(p.text)
+            .monospace(),
+    );
 }
 
 /// Карточка целостности: три состояния — зелёный, красный, серый.
@@ -398,7 +479,8 @@ fn integrity_card(app: &mut App, ui: &mut egui::Ui, p: Palette) {
                 ui.vertical(|ui| {
                     ui.label(egui::RichText::new(title).strong().color(color));
                     ui.add(
-                        egui::Label::new(egui::RichText::new(detail).size(11.5).color(p.muted)).wrap(),
+                        egui::Label::new(egui::RichText::new(detail).size(11.5).color(p.muted))
+                            .wrap(),
                     );
                 });
             });
@@ -430,15 +512,34 @@ fn archive_card(app: &App, ui: &mut egui::Ui, p: Palette) {
             kv(ui, "Ссылок", &links.to_string(), p);
         }
         kv(ui, "Блоков", &index.blocks.len().to_string(), p);
-        kv(ui, "Режим", if index.solid { "solid" } else { "обычный" }, p);
+        kv(
+            ui,
+            "Режим",
+            if index.solid {
+                "solid"
+            } else {
+                "обычный"
+            },
+            p,
+        );
         if loaded.meta.encrypted {
             kv(ui, "Шифр", "ChaCha20-Poly1305", p);
         }
         if loaded.meta.archive_bytes > 0 {
-            kv(ui, "Размер файла", &pliczip::util::human_bytes(loaded.meta.archive_bytes), p);
+            kv(
+                ui,
+                "Размер файла",
+                &pliczip::util::human_bytes(loaded.meta.archive_bytes),
+                p,
+            );
         }
         if index.created_at > 0 {
-            kv(ui, "Создан", &pliczip::util::format_unix_time(index.created_at), p);
+            kv(
+                ui,
+                "Создан",
+                &pliczip::util::format_unix_time(index.created_at),
+                p,
+            );
         }
     });
 }
@@ -467,8 +568,13 @@ fn selection_card(app: &App, ui: &mut egui::Ui, p: Palette) {
             ui.add(egui::Label::new(egui::RichText::new(name).strong().color(p.text)).truncate());
         });
         ui.add(
-            egui::Label::new(egui::RichText::new(&entry.path).size(11.5).color(p.dim).monospace())
-                .wrap(),
+            egui::Label::new(
+                egui::RichText::new(&entry.path)
+                    .size(11.5)
+                    .color(p.dim)
+                    .monospace(),
+            )
+            .wrap(),
         );
         ui.add_space(2.0);
         match entry.kind {
@@ -491,10 +597,20 @@ fn selection_card(app: &App, ui: &mut egui::Ui, p: Palette) {
             }
         }
         if entry.mtime > 0 {
-            kv(ui, "Изменён", &pliczip::util::format_unix_time(entry.mtime), p);
+            kv(
+                ui,
+                "Изменён",
+                &pliczip::util::format_unix_time(entry.mtime),
+                p,
+            );
         }
         if entry.kind == Kind::File {
-            let hex: String = entry.hash.iter().take(10).map(|b| format!("{b:02x}")).collect();
+            let hex: String = entry
+                .hash
+                .iter()
+                .take(10)
+                .map(|b| format!("{b:02x}"))
+                .collect();
             kv(ui, "BLAKE3", &format!("{hex}…"), p);
         }
     });
@@ -505,7 +621,9 @@ fn kv(ui: &mut egui::Ui, key: &str, value: &str, p: Palette) {
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(key).color(p.muted));
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            ui.add(egui::Label::new(egui::RichText::new(value).color(p.text).monospace()).truncate());
+            ui.add(
+                egui::Label::new(egui::RichText::new(value).color(p.text).monospace()).truncate(),
+            );
         });
     });
 }
@@ -567,18 +685,22 @@ fn column_rects(row: Rect) -> (Rect, [Rect; 5]) {
         cols[i] = Rect::from_min_max(pos2(right - w, row.top()), pos2(right, row.bottom()));
         right -= w + 8.0;
     }
-    let name = Rect::from_min_max(pos2(row.left() + 14.0, row.top()), pos2(right, row.bottom()));
+    let name = Rect::from_min_max(
+        pos2(row.left() + 14.0, row.top()),
+        pos2(right, row.bottom()),
+    );
     (name, cols)
 }
 
 /// Центральная область: таблица содержимого или пустое состояние.
 pub fn central(app: &mut App, ui: &mut egui::Ui, p: Palette, busy: bool) {
     egui::CentralPanel::default()
-        .frame(
-            egui::Frame::new()
-                .fill(p.bg)
-                .inner_margin(egui::Margin { left: 16, right: 12, top: 6, bottom: 14 }),
-        )
+        .frame(egui::Frame::new().fill(p.bg).inner_margin(egui::Margin {
+            left: 16,
+            right: 12,
+            top: 6,
+            bottom: 14,
+        }))
         .show(ui, |ui| {
             if app.loaded.is_none() {
                 empty_state(app, ui, p, busy);
@@ -615,7 +737,11 @@ fn table(app: &mut App, ui: &mut egui::Ui, p: Palette) {
             .interact(rect, ui.scope_id().with(("sort", title)), Sense::click())
             .on_hover_cursor(CursorIcon::PointingHand);
         let active = sort == key;
-        let color = if active || resp.hovered() { p.text } else { p.dim };
+        let color = if active || resp.hovered() {
+            p.text
+        } else {
+            p.dim
+        };
         let (pos, align) = if left {
             (pos2(rect.left(), rect.center().y), Align2::LEFT_CENTER)
         } else {
@@ -623,7 +749,11 @@ fn table(app: &mut App, ui: &mut egui::Ui, p: Palette) {
         };
         let text_rect = painter.text(pos, align, title, header_font.clone(), color);
         if active {
-            let x = if left { text_rect.right() + 8.0 } else { text_rect.left() - 8.0 };
+            let x = if left {
+                text_rect.right() + 8.0
+            } else {
+                text_rect.left() - 8.0
+            };
             widgets::sort_arrow(&painter, pos2(x, rect.center().y), desc, p.accent);
         }
         if resp.clicked() {
@@ -647,7 +777,9 @@ fn table(app: &mut App, ui: &mut egui::Ui, p: Palette) {
 
     // Под модальным окном подсказки строк не показываем.
     let interactive = app.modal_kind() == crate::app::ModalKind::None && app.op.is_none();
-    let Some(loaded) = &mut app.loaded else { return };
+    let Some(loaded) = &mut app.loaded else {
+        return;
+    };
     let flat = loaded.is_flat(sort);
     let index = &loaded.meta.index;
     let rows = loaded.view.len();
@@ -659,7 +791,8 @@ fn table(app: &mut App, ui: &mut egui::Ui, p: Palette) {
             widgets::icon(ui, Icon::Search, 28.0, p.dim);
             ui.add_space(6.0);
             ui.label(
-                egui::RichText::new(format!("Ничего не найдено по «{}»", loaded.filter)).color(p.muted),
+                egui::RichText::new(format!("Ничего не найдено по «{}»", loaded.filter))
+                    .color(p.muted),
             );
         });
         return;
@@ -694,7 +827,10 @@ fn table(app: &mut App, ui: &mut egui::Ui, p: Palette) {
                     painter.rect_filled(row.shrink2(vec2(4.0, 1.0)), 6.0, bg);
                 }
                 if selected {
-                    let bar = Rect::from_min_size(row.left_top() + vec2(4.0, 6.0), vec2(3.0, ROW_H - 12.0));
+                    let bar = Rect::from_min_size(
+                        row.left_top() + vec2(4.0, 6.0),
+                        vec2(3.0, ROW_H - 12.0),
+                    );
                     painter.rect_filled(bar, 1.5, p.accent);
                 }
                 let (name_rect, cols) = column_rects(row);
@@ -705,7 +841,13 @@ fn table(app: &mut App, ui: &mut egui::Ui, p: Palette) {
                 let mut x = name_rect.left() + if flat { 0.0 } else { depth * 18.0 };
                 let icon_rect = Rect::from_center_size(pos2(x + 8.0, cy), vec2(16.0, 16.0));
                 let row_bg = bg.unwrap_or(p.panel);
-                widgets::paint_icon(painter, icon_rect, entry_icon(entry.kind), entry_color(entry.kind, p), row_bg);
+                widgets::paint_icon(
+                    painter,
+                    icon_rect,
+                    entry_icon(entry.kind),
+                    entry_color(entry.kind, p),
+                    row_bg,
+                );
                 x += 26.0;
                 let clip = painter.with_clip_rect(Rect::from_min_max(
                     pos2(x, row.top()),
@@ -725,18 +867,38 @@ fn table(app: &mut App, ui: &mut egui::Ui, p: Palette) {
                     );
                     x = r.right();
                 }
-                let name_color = if entry.kind == Kind::Dir { p.text } else { mix(p.text, p.muted, 0.15) };
-                clip.text(pos2(x, cy), Align2::LEFT_CENTER, name, text_font.clone(), name_color);
+                let name_color = if entry.kind == Kind::Dir {
+                    p.text
+                } else {
+                    mix(p.text, p.muted, 0.15)
+                };
+                clip.text(
+                    pos2(x, cy),
+                    Align2::LEFT_CENTER,
+                    name,
+                    text_font.clone(),
+                    name_color,
+                );
 
                 let right_text = |rect: Rect, text: String, color: Color32| {
-                    painter.text(pos2(rect.right(), cy), Align2::RIGHT_CENTER, text, mono.clone(), color);
+                    painter.text(
+                        pos2(rect.right(), cy),
+                        Align2::RIGHT_CENTER,
+                        text,
+                        mono.clone(),
+                        color,
+                    );
                 };
                 let block = entry.block.and_then(|b| index.blocks.get(b as usize));
 
                 // Дата.
                 right_text(
                     cols[0],
-                    if entry.mtime > 0 { fmt_date(entry.mtime) } else { "—".into() },
+                    if entry.mtime > 0 {
+                        fmt_date(entry.mtime)
+                    } else {
+                        "—".into()
+                    },
                     p.dim,
                 );
                 // Метод.
@@ -764,16 +926,26 @@ fn table(app: &mut App, ui: &mut egui::Ui, p: Palette) {
                 // В архиве и размер.
                 right_text(
                     cols[3],
-                    packed_size(index, entry).map(pliczip::util::human_bytes).unwrap_or_else(|| "—".into()),
+                    packed_size(index, entry)
+                        .map(pliczip::util::human_bytes)
+                        .unwrap_or_else(|| "—".into()),
                     p.muted,
                 );
                 right_text(
                     cols[4],
-                    if entry.kind == Kind::Dir { "—".into() } else { pliczip::util::human_bytes(entry.size) },
+                    if entry.kind == Kind::Dir {
+                        "—".into()
+                    } else {
+                        pliczip::util::human_bytes(entry.size)
+                    },
                     p.text,
                 );
 
-                let resp = if interactive { resp.on_hover_text_at_pointer(&entry.path) } else { resp };
+                let resp = if interactive {
+                    resp.on_hover_text_at_pointer(&entry.path)
+                } else {
+                    resp
+                };
                 if resp.clicked() {
                     clicked = Some(i);
                 }
@@ -781,17 +953,26 @@ fn table(app: &mut App, ui: &mut egui::Ui, p: Palette) {
         });
 
     if let Some(i) = clicked {
-        loaded.selected = if loaded.selected == Some(i) { None } else { Some(i) };
+        loaded.selected = if loaded.selected == Some(i) {
+            None
+        } else {
+            Some(i)
+        };
     }
 }
 
 /// Пустое состояние: зона перетаскивания и быстрые действия.
 fn empty_state(app: &mut App, ui: &mut egui::Ui, p: Palette, busy: bool) {
     let avail = ui.available_rect_before_wrap();
-    let size = vec2(560.0_f32.min(avail.width() - 40.0), 340.0_f32.min(avail.height() - 40.0));
+    let size = vec2(
+        560.0_f32.min(avail.width() - 40.0),
+        340.0_f32.min(avail.height() - 40.0),
+    );
     let zone = Rect::from_center_size(avail.center(), size);
     let hovering = ui.ctx().input(|i| !i.raw.hovered_files.is_empty());
-    let t = ui.ctx().animate_bool_with_time(egui::Id::unique("empty_drop"), hovering, 0.2);
+    let t = ui
+        .ctx()
+        .animate_bool_with_time(egui::Id::unique("empty_drop"), hovering, 0.2);
 
     let painter = ui.painter();
     painter.rect_filled(zone, 20.0, mix(p.panel, p.accent, 0.04 + 0.08 * t));
@@ -813,31 +994,57 @@ fn empty_state(app: &mut App, ui: &mut egui::Ui, p: Palette, busy: bool) {
     let (r, _) = ui.allocate_exact_size(vec2(84.0, 84.0), Sense::hover());
     let painter = ui.painter();
     painter.circle_filled(r.center(), 42.0, mix(p.panel, p.accent, 0.10 + 0.08 * t));
-    painter.circle_stroke(r.center(), 42.0, Stroke::new(1.0, p.accent.gamma_multiply(0.35)));
+    painter.circle_stroke(
+        r.center(),
+        42.0,
+        Stroke::new(1.0, p.accent.gamma_multiply(0.35)),
+    );
     let fill = mix(p.panel, p.accent, 0.10);
-    widgets::paint_icon(painter, Rect::from_center_size(r.center(), vec2(38.0, 38.0)), Icon::Archive, p.accent, fill);
+    widgets::paint_icon(
+        painter,
+        Rect::from_center_size(r.center(), vec2(38.0, 38.0)),
+        Icon::Archive,
+        p.accent,
+        fill,
+    );
     ui.add_space(14.0);
-    ui.label(egui::RichText::new("PlicZip").size(28.0).strong().color(p.text));
+    ui.label(
+        egui::RichText::new("PlicZip")
+            .size(28.0)
+            .strong()
+            .color(p.text),
+    );
     ui.add_space(2.0);
     ui.label(
-        egui::RichText::new("Перетащите сюда архив .plz, чтобы открыть, или файлы — чтобы упаковать")
-            .color(p.muted),
+        egui::RichText::new(
+            "Перетащите сюда архив .plz, чтобы открыть, или файлы — чтобы упаковать",
+        )
+        .color(p.muted),
     );
     ui.add_space(18.0);
     let buttons_w = 300.0;
-    ui.allocate_ui_with_layout(vec2(buttons_w, 34.0), Layout::left_to_right(Align::Center), |ui| {
-        if widgets::button(ui, Some(Icon::Folder), "Открыть архив", Btn::Primary, !busy).clicked() {
-            app.pick_and_open();
-        }
-        if widgets::button(ui, Some(Icon::Plus), "Создать архив", Btn::Normal, !busy).clicked() {
-            app.modal = Modal::Create(CreateDlg::from_sources(Vec::new()));
-        }
-    });
+    ui.allocate_ui_with_layout(
+        vec2(buttons_w, 34.0),
+        Layout::left_to_right(Align::Center),
+        |ui| {
+            if widgets::button(ui, Some(Icon::Folder), "Открыть архив", Btn::Primary, !busy)
+                .clicked()
+            {
+                app.pick_and_open();
+            }
+            if widgets::button(ui, Some(Icon::Plus), "Создать архив", Btn::Normal, !busy).clicked()
+            {
+                app.modal = Modal::Create(CreateDlg::from_sources(Vec::new()));
+            }
+        },
+    );
     ui.add_space(16.0);
     ui.label(
-        egui::RichText::new("BLAKE3 на каждый файл · шифрование ChaCha20-Poly1305 · многотомные архивы")
-            .size(11.5)
-            .color(p.dim),
+        egui::RichText::new(
+            "BLAKE3 на каждый файл · шифрование ChaCha20-Poly1305 · многотомные архивы",
+        )
+        .size(11.5)
+        .color(p.dim),
     );
 }
 
@@ -854,11 +1061,19 @@ pub fn drop_overlay(ctx: &egui::Context, p: Palette) {
     if t <= 0.0 {
         return;
     }
-    let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("drop_layer")));
+    let painter = ctx.layer_painter(egui::LayerId::new(
+        egui::Order::Foreground,
+        egui::Id::unique("drop_layer"),
+    ));
     let screen = ctx.content_rect();
     painter.rect_filled(screen, 0.0, p.bg.gamma_multiply(0.82 * t));
     let zone = screen.shrink(24.0);
-    widgets::dashed_rect(&painter, zone, 22.0, Stroke::new(2.0, p.accent.gamma_multiply(t)));
+    widgets::dashed_rect(
+        &painter,
+        zone,
+        22.0,
+        Stroke::new(2.0, p.accent.gamma_multiply(t)),
+    );
     let c = zone.center();
     let fill = mix(p.bg, p.accent, 0.15);
     painter.circle_filled(c - vec2(0.0, 40.0), 38.0, fill.gamma_multiply(t));
@@ -870,10 +1085,30 @@ pub fn drop_overlay(ctx: &egui::Context, p: Palette) {
         p.accent.gamma_multiply(t),
         fill,
     );
-    let title = if plz { "Отпустите, чтобы открыть архив" } else { "Отпустите, чтобы упаковать" };
-    painter.text(c + vec2(0.0, 22.0), Align2::CENTER_CENTER, title, FontId::proportional(22.0), p.text.gamma_multiply(t));
-    let sub = if plz { "архив .plz откроется в окне" } else { "откроется диалог создания архива" };
-    painter.text(c + vec2(0.0, 50.0), Align2::CENTER_CENTER, sub, FontId::proportional(13.0), p.muted.gamma_multiply(t));
+    let title = if plz {
+        "Отпустите, чтобы открыть архив"
+    } else {
+        "Отпустите, чтобы упаковать"
+    };
+    painter.text(
+        c + vec2(0.0, 22.0),
+        Align2::CENTER_CENTER,
+        title,
+        FontId::proportional(22.0),
+        p.text.gamma_multiply(t),
+    );
+    let sub = if plz {
+        "архив .plz откроется в окне"
+    } else {
+        "откроется диалог создания архива"
+    };
+    painter.text(
+        c + vec2(0.0, 50.0),
+        Align2::CENTER_CENTER,
+        sub,
+        FontId::proportional(13.0),
+        p.muted.gamma_multiply(t),
+    );
 }
 
 /// Уведомление в правом нижнем углу: появляется и тает за 4 секунды.
@@ -889,14 +1124,20 @@ pub fn toast(app: &mut App, ctx: &egui::Context, p: Palette) {
     let slide = (1.0 - (age / 0.25).min(1.0)) * 12.0;
     ctx.request_repaint();
 
-    let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("toast")));
+    let painter = ctx.layer_painter(egui::LayerId::new(
+        egui::Order::Tooltip,
+        egui::Id::unique("toast"),
+    ));
     let font = FontId::proportional(13.5);
     let color = if toast.ok { p.ok } else { p.err };
     let galley = painter.layout_no_wrap(toast.text.clone(), font, p.text.gamma_multiply(alpha));
     let size = vec2(galley.size().x + 58.0, 44.0);
     let screen = ctx.content_rect();
     let rect = Rect::from_min_size(
-        pos2(screen.right() - size.x - 18.0, screen.bottom() - size.y - 40.0 + slide),
+        pos2(
+            screen.right() - size.x - 18.0,
+            screen.bottom() - size.y - 40.0 + slide,
+        ),
         size,
     );
     let fill = mix(p.panel, color, 0.10);
@@ -907,7 +1148,8 @@ pub fn toast(app: &mut App, ctx: &egui::Context, p: Palette) {
         Stroke::new(1.0, color.gamma_multiply(0.5 * alpha)),
         StrokeKind::Inside,
     );
-    let icon_rect = Rect::from_center_size(pos2(rect.left() + 24.0, rect.center().y), vec2(18.0, 18.0));
+    let icon_rect =
+        Rect::from_center_size(pos2(rect.left() + 24.0, rect.center().y), vec2(18.0, 18.0));
     let icon = if toast.ok { Icon::Check } else { Icon::Cross };
     widgets::paint_icon(&painter, icon_rect, icon, color.gamma_multiply(alpha), fill);
     painter.galley(
@@ -934,11 +1176,16 @@ pub fn status_bar(app: &mut App, ui: &mut egui::Ui) {
                     ui.add(egui::Spinner::new().size(12.0).color(p.accent));
                     ui.label(egui::RichText::new(format!("{}…", op.label)).color(p.accent));
                     let (bar, _) = ui.allocate_exact_size(vec2(140.0, 5.0), Sense::hover());
-                    ui.painter().rect_filled(bar, 2.5, mix(p.panel, p.text, 0.1));
+                    ui.painter()
+                        .rect_filled(bar, 2.5, mix(p.panel, p.text, 0.1));
                     let mut fill = bar;
                     fill.set_width(bar.width() * (op.percent() / 100.0) as f32);
                     ui.painter().rect_filled(fill, 2.5, p.accent);
-                    ui.label(egui::RichText::new(format!("{:.0}%", op.percent())).color(p.muted).monospace());
+                    ui.label(
+                        egui::RichText::new(format!("{:.0}%", op.percent()))
+                            .color(p.muted)
+                            .monospace(),
+                    );
                 } else if let Some(text) = &app.last_action {
                     let (r, _) = ui.allocate_exact_size(vec2(8.0, 8.0), Sense::hover());
                     ui.painter().circle_filled(r.center(), 3.5, p.ok);

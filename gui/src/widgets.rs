@@ -61,14 +61,29 @@ pub fn paint_icon(painter: &Painter, rect: Rect, icon: Icon, color: Color32, bg:
     match icon {
         Icon::Folder => {
             painter.rect_filled(r(1.5, 2.5, 7.0, 6.0), 1.2 * u, color);
-            painter.rect(r(1.5, 4.5, 14.5, 13.5), 1.6 * u, soft, stroke, StrokeKind::Inside);
+            painter.rect(
+                r(1.5, 4.5, 14.5, 13.5),
+                1.6 * u,
+                soft,
+                stroke,
+                StrokeKind::Inside,
+            );
             painter.rect_filled(r(1.5, 5.5, 14.5, 7.0), 0.0, color.gamma_multiply(0.55));
         }
         Icon::File => {
-            let outline = vec![p(3.0, 1.5), p(10.0, 1.5), p(13.0, 4.5), p(13.0, 14.5), p(3.0, 14.5)];
+            let outline = vec![
+                p(3.0, 1.5),
+                p(10.0, 1.5),
+                p(13.0, 4.5),
+                p(13.0, 14.5),
+                p(3.0, 14.5),
+            ];
             painter.add(Shape::convex_polygon(outline.clone(), soft, Stroke::NONE));
             painter.add(Shape::closed_line(outline, stroke));
-            painter.add(Shape::line(vec![p(10.0, 1.5), p(10.0, 4.5), p(13.0, 4.5)], stroke));
+            painter.add(Shape::line(
+                vec![p(10.0, 1.5), p(10.0, 4.5), p(13.0, 4.5)],
+                stroke,
+            ));
             painter.line_segment([p(5.5, 8.0), p(10.5, 8.0)], stroke);
             painter.line_segment([p(5.5, 11.0), p(9.0, 11.0)], stroke);
         }
@@ -77,7 +92,13 @@ pub fn paint_icon(painter: &Painter, rect: Rect, icon: Icon, color: Color32, bg:
             painter.rect_stroke(r(6.5, 5.5, 14.5, 10.5), 2.5 * u, stroke, StrokeKind::Middle);
         }
         Icon::Archive => {
-            painter.rect(r(2.5, 5.0, 13.5, 14.5), 1.5 * u, soft, stroke, StrokeKind::Inside);
+            painter.rect(
+                r(2.5, 5.0, 13.5, 14.5),
+                1.5 * u,
+                soft,
+                stroke,
+                StrokeKind::Inside,
+            );
             painter.rect_filled(r(1.5, 2.0, 14.5, 5.5), 1.5 * u, color);
             painter.rect_filled(r(6.8, 7.0, 9.2, 10.8), 0.8 * u, color);
             painter.line_segment([p(8.0, 5.5), p(8.0, 7.0)], stroke);
@@ -93,7 +114,10 @@ pub fn paint_icon(painter: &Painter, rect: Rect, icon: Icon, color: Color32, bg:
                 stroke,
             ));
             painter.line_segment([p(8.0, 11.0), p(8.0, 2.0)], stroke);
-            painter.add(Shape::line(vec![p(4.5, 5.5), p(8.0, 2.0), p(11.5, 5.5)], stroke));
+            painter.add(Shape::line(
+                vec![p(4.5, 5.5), p(8.0, 2.0), p(11.5, 5.5)],
+                stroke,
+            ));
         }
         Icon::Shield | Icon::Check | Icon::Cross => {
             let shield = vec![
@@ -110,7 +134,10 @@ pub fn paint_icon(painter: &Painter, rect: Rect, icon: Icon, color: Color32, bg:
             painter.add(Shape::closed_line(shield, stroke));
             match icon {
                 Icon::Check => {
-                    painter.add(Shape::line(vec![p(5.3, 8.0), p(7.3, 10.0), p(10.8, 6.0)], stroke));
+                    painter.add(Shape::line(
+                        vec![p(5.3, 8.0), p(7.3, 10.0), p(10.8, 6.0)],
+                        stroke,
+                    ));
                 }
                 Icon::Cross => {
                     painter.line_segment([p(5.8, 5.8), p(10.2, 10.2)], stroke);
@@ -131,7 +158,10 @@ pub fn paint_icon(painter: &Painter, rect: Rect, icon: Icon, color: Color32, bg:
         }
         Icon::Search => {
             painter.circle_stroke(p(7.0, 7.0), 4.5 * u, stroke);
-            painter.line_segment([p(10.4, 10.4), p(14.0, 14.0)], Stroke::new(stroke.width * 1.2, color));
+            painter.line_segment(
+                [p(10.4, 10.4), p(14.0, 14.0)],
+                Stroke::new(stroke.width * 1.2, color),
+            );
         }
         Icon::Sun => {
             painter.circle_filled(c, 3.0 * u, color);
@@ -153,8 +183,14 @@ pub fn paint_icon(painter: &Painter, rect: Rect, icon: Icon, color: Color32, bg:
             let top = vec![p(8.0, 2.0), p(14.0, 5.5), p(8.0, 9.0), p(2.0, 5.5)];
             painter.add(Shape::convex_polygon(top.clone(), soft, Stroke::NONE));
             painter.add(Shape::closed_line(top, stroke));
-            painter.add(Shape::line(vec![p(2.0, 8.5), p(8.0, 12.0), p(14.0, 8.5)], stroke));
-            painter.add(Shape::line(vec![p(2.0, 11.0), p(8.0, 14.5), p(14.0, 11.0)], stroke));
+            painter.add(Shape::line(
+                vec![p(2.0, 8.5), p(8.0, 12.0), p(14.0, 8.5)],
+                stroke,
+            ));
+            painter.add(Shape::line(
+                vec![p(2.0, 11.0), p(8.0, 14.5), p(14.0, 11.0)],
+                stroke,
+            ));
         }
     }
 }
@@ -168,7 +204,15 @@ pub fn icon(ui: &mut Ui, icon: Icon, size: f32, color: Color32) -> Response {
 }
 
 /// Кольцевая диаграмма: дорожка и дуга доли `frac` (0..1), старт сверху.
-pub fn ring(painter: &Painter, center: Pos2, radius: f32, width: f32, frac: f32, track: Color32, color: Color32) {
+pub fn ring(
+    painter: &Painter,
+    center: Pos2,
+    radius: f32,
+    width: f32,
+    frac: f32,
+    track: Color32,
+    color: Color32,
+) {
     painter.circle_stroke(center, radius, Stroke::new(width, track));
     let frac = frac.clamp(0.0, 1.0);
     if frac > 0.002 {
@@ -201,10 +245,18 @@ pub fn button(ui: &mut Ui, icon: Option<Icon>, label: &str, kind: Kind, enabled:
         .painter()
         .layout_no_wrap(label.to_owned(), font.clone(), p.text);
     let pad = if label.is_empty() { 8.0 } else { 13.0 };
-    let gap = if icon.is_some() && !label.is_empty() { 7.0 } else { 0.0 };
+    let gap = if icon.is_some() && !label.is_empty() {
+        7.0
+    } else {
+        0.0
+    };
     let icon_w = if icon.is_some() { 16.0 } else { 0.0 };
     let width = (pad * 2.0 + icon_w + gap + galley.size().x).max(32.0);
-    let sense = if enabled { Sense::click() } else { Sense::hover() };
+    let sense = if enabled {
+        Sense::click()
+    } else {
+        Sense::hover()
+    };
     let (rect, mut resp) = ui.allocate_exact_size(vec2(width, 32.0), sense);
 
     if ui.is_rect_visible(rect) {
@@ -249,7 +301,13 @@ pub fn button(ui: &mut Ui, icon: Option<Icon>, label: &str, kind: Kind, enabled:
             x += 16.0 + gap;
         }
         if !label.is_empty() {
-            painter.text(pos2(x, rect.center().y), Align2::LEFT_CENTER, label, font, fg);
+            painter.text(
+                pos2(x, rect.center().y),
+                Align2::LEFT_CENTER,
+                label,
+                font,
+                fg,
+            );
         }
     }
     if enabled {
@@ -261,20 +319,34 @@ pub fn button(ui: &mut Ui, icon: Option<Icon>, label: &str, kind: Kind, enabled:
 /// Плашка-«чип»: короткий признак архива.
 pub fn chip(ui: &mut Ui, icon: Option<Icon>, text: &str, color: Color32) -> Response {
     let font = FontId::proportional(12.0);
-    let galley = ui.painter().layout_no_wrap(text.to_owned(), font.clone(), color);
+    let galley = ui
+        .painter()
+        .layout_no_wrap(text.to_owned(), font.clone(), color);
     let icon_w = if icon.is_some() { 12.0 + 5.0 } else { 0.0 };
     let size = vec2(galley.size().x + icon_w + 18.0, 24.0);
     let (rect, resp) = ui.allocate_exact_size(size, Sense::hover());
     let painter = ui.painter();
     let fill = mix(ui.visuals().panel_fill, color, 0.13);
-    painter.rect(rect, 12.0, fill, Stroke::new(1.0, color.gamma_multiply(0.35)), StrokeKind::Inside);
+    painter.rect(
+        rect,
+        12.0,
+        fill,
+        Stroke::new(1.0, color.gamma_multiply(0.35)),
+        StrokeKind::Inside,
+    );
     let mut x = rect.left() + 9.0;
     if let Some(icon) = icon {
         let ir = Rect::from_center_size(pos2(x + 6.0, rect.center().y), vec2(12.0, 12.0));
         paint_icon(painter, ir, icon, color, fill);
         x += icon_w;
     }
-    painter.text(pos2(x, rect.center().y), Align2::LEFT_CENTER, text, font, color);
+    painter.text(
+        pos2(x, rect.center().y),
+        Align2::LEFT_CENTER,
+        text,
+        font,
+        color,
+    );
     resp
 }
 
@@ -317,9 +389,17 @@ pub fn dashed_rect(painter: &Painter, rect: Rect, radius: f32, stroke: Stroke) {
 /// Маленький треугольник-стрелка сортировки.
 pub fn sort_arrow(painter: &Painter, center: Pos2, desc: bool, color: Color32) {
     let (a, b, c) = if desc {
-        (center + vec2(-3.5, -2.0), center + vec2(3.5, -2.0), center + vec2(0.0, 2.5))
+        (
+            center + vec2(-3.5, -2.0),
+            center + vec2(3.5, -2.0),
+            center + vec2(0.0, 2.5),
+        )
     } else {
-        (center + vec2(-3.5, 2.0), center + vec2(3.5, 2.0), center + vec2(0.0, -2.5))
+        (
+            center + vec2(-3.5, 2.0),
+            center + vec2(3.5, 2.0),
+            center + vec2(0.0, -2.5),
+        )
     };
     painter.add(Shape::convex_polygon(vec![a, b, c], color, Stroke::NONE));
 }

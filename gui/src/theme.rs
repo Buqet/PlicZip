@@ -97,7 +97,8 @@ impl Palette {
 
     /// Полупрозрачный акцент под выделение строки.
     pub fn accent_soft(self) -> Color32 {
-        self.accent.gamma_multiply(if self.dark { 0.16 } else { 0.12 })
+        self.accent
+            .gamma_multiply(if self.dark { 0.16 } else { 0.12 })
     }
 }
 
@@ -175,4 +176,3 @@ pub fn apply(ctx: &egui::Context, cfg: &Config) {
         style.spacing.interact_size.y = 26.0;
     });
 }
-

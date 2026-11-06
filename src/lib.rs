@@ -43,6 +43,7 @@ pub mod reader;
 pub mod recovery;
 pub mod safety;
 pub mod source;
+pub mod update;
 pub mod util;
 pub mod writer;
 
