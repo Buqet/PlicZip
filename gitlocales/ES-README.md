@@ -99,3 +99,14 @@ Las rutas del archivo se validan al escribir y al leer para evitar zip-slip, rut
 MIT OR Apache-2.0.
 
 El target de fuzzing necesita Rust nightly: `rustup toolchain install nightly && RUSTUP_TOOLCHAIN=nightly cargo fuzz run paths -- -max_total_time=60`.
+
+## Lo que aún falta
+
+- Modificar un archivo `.plz` ya terminado (el botón «Modificar» de la GUI todavía está reservado).
+- Deduplicación de archivos.
+- Lectura desde `stdin`, porque el índice está al final.
+- Nombres de archivo que no puedan representarse en UTF-8.
+- Firma digital del archivo.
+- Cifrado solo de nombres sin cifrar los datos.
+
+La recuperación mediante `--recovery` y `repair`, así como el menú contextual de Windows, ya están implementados para archivos de un solo volumen.

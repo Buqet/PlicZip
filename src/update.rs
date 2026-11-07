@@ -2,6 +2,7 @@
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
+use std::time::Duration;
 
 const RELEASES_URL: &str = "https://api.github.com/repos/Buqet/PlicZip/releases?per_page=20";
 
@@ -34,30 +35,17 @@ pub struct ReleaseInfo {
 /// Функция только читает GitHub API: обновление и запуск файлов автоматически
 /// не выполняются.
 pub fn check_latest() -> Result<ReleaseInfo> {
-    let output = std::process::Command::new("curl")
-        .args([
-            "--fail",
-            "--silent",
-            "--show-error",
-            "--location",
-            "--connect-timeout",
-            "5",
-            "--max-time",
-            "8",
-            "--header",
-            "Accept: application/vnd.github+json",
-            "--user-agent",
-            "PlicZip-update-check",
-            RELEASES_URL,
-        ])
-        .output()
-        .context("не удалось запустить curl для проверки обновлений")?;
-    anyhow::ensure!(
-        output.status.success(),
-        "GitHub не ответил при проверке обновлений: {}",
-        String::from_utf8_lossy(&output.stderr).trim()
-    );
-    let releases: Vec<GithubRelease> = serde_json::from_slice(&output.stdout)
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(Duration::from_secs(5))
+        .timeout_read(Duration::from_secs(8))
+        .build();
+    let releases: Vec<GithubRelease> = agent
+        .get(RELEASES_URL)
+        .set("Accept", "application/vnd.github+json")
+        .set("User-Agent", "PlicZip-update-check")
+        .call()
+        .context("не удалось связаться с GitHub для проверки обновлений")?
+        .into_json()
         .context("GitHub вернул неожиданный ответ при проверке обновлений")?;
     let release = releases
         .into_iter()

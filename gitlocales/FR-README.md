@@ -185,7 +185,7 @@ calculés sur les dernières secondes, pas moyennés depuis le début ;
 - **paramètres** — thème (sombre/clair) et accent (laiton/acier/vert)
 enregistrés dans `%APPDATA%/pliczip/config.json`.
 
-Pas encore fait : modification d'une archive existante (bouton « Modifier »), association `.plz` avec l'Explorateur et menu contextuel — c'est le prochain bloc.
+Il ne reste que la modification d'une archive existante (bouton « Modifier »). L'association `.plz` et le menu contextuel peuvent être activés avec `--install-context-menu`.
 
 ## Intégrité
 
@@ -272,15 +272,16 @@ Principes en bref : l'éclair comme métaphore du nom, le laiton comme seul acce
 
 Une liste honnête, pour ne pas chercher :
 
-- **recovery record** — un secteur endommagé n'est pas récupérable (prévu ; c'est la
-différence avec 7z et zip) ;
+- **recovery record** — disponible pour les archives à un seul fichier ; `repair`
+récupère les données lorsque le parity est suffisant ;
 - **déduplication** — les fichiers identiques sont encore stockés séparément, bien que les
 hachages existent déjà pour cela ;
 - **lecture depuis stdin** — à cause de l'index en fin de fichier ;
 - **noms non-UTF-8** — un chemin non représentable en UTF-8 n'est pas archivé ;
 - **modification d'archive** — les fichiers ne peuvent être ni ajoutés à une archive
 terminée ni supprimés (le bouton « Modifier » dans la GUI est vide pour l'instant) ;
-- **intégration à l'Explorateur** — l'association `.plz` et le menu contextuel n'existent pas encore ;
+- **intégration à l'Explorateur** — disponible sous Windows avec
+`pliczip-gui.exe --install-context-menu` ;
 - **signature numérique** de l'archive ;
 - **chiffrement des noms seuls** sans chiffrer les données — volontairement non fait : crée
 une fausse impression de protection.

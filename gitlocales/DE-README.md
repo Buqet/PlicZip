@@ -185,7 +185,7 @@ maximal" mit Erklärung der Folgen, solid, Passwort, Volume-Größe, Kommentar;
 - **Einstellungen** — Theme (dunkel/hell) und Akzent (Messing/Stahl/Grün)
 gespeichert in `%APPDATA%/pliczip/config.json`.
 
-Noch nicht umgesetzt: Ändern eines bestehenden Archivs (Schaltfläche „Ändern"), `.plz`-Verknüpfung mit dem Explorer und Kontextmenü — das ist der nächste Block.
+Noch nicht umgesetzt ist nur das Ändern eines bestehenden Archivs (Schaltfläche „Ändern"). Die `.plz`-Verknüpfung und das Explorer-Kontextmenü können über `--install-context-menu` eingerichtet werden.
 
 ## Integrität
 
@@ -274,15 +274,15 @@ Prinzipien kurz: der Blitz als Metapher des Namens, Messing als einziger Akzent,
 
 Eine ehrliche Liste, damit du nicht suchen musst:
 
-- **recovery record** — ein beschädigter Sektor lässt sich nicht wiederherstellen (geplant; das ist der
-Unterschied zu 7z und zip);
+- **recovery record** — für Einzeldatei-Archive implementiert; `repair` stellt beschädigte
+Daten wieder her, wenn genügend Parity vorhanden ist;
 - **Deduplizierung** — identische Dateien werden noch separat gespeichert, obwohl die
 Hashes dafür bereits vorhanden sind;
 - **Lesen aus stdin** — wegen des Index am Ende;
 - **Nicht-UTF-8-Namen** — ein Pfad, der nicht als UTF-8 darstellbar ist, wird nicht archiviert;
 - **Archivänderung** — Dateien können einem fertigen Archiv weder hinzugefügt noch
 daraus entfernt werden (die Schaltfläche „Ändern" in der GUI ist vorerst leer);
-- **Explorer-Integration** — `.plz`-Verknüpfung und Kontextmenü fehlen noch;
+- **Explorer-Integration** — unter Windows über `pliczip-gui.exe --install-context-menu` verfügbar;
 - **digitale Signatur** des Archivs;
 - **Verschlüsselung nur der Namen** ohne Datenverschlüsselung — bewusst nicht gemacht: erzeugt
 ein falsches Gefühl von Schutz.
@@ -340,4 +340,3 @@ ar.extract(&ExtractOptions { output: dir, ..Default::default() })?;
 ```
 
 Lizenz: MIT OR Apache-2.0.
-

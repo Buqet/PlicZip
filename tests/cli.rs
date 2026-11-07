@@ -66,6 +66,31 @@ fn missing_input_path_gives_clear_error() {
 }
 
 #[test]
+fn keyfile_and_password_conflict_is_one_line_error() {
+    let dir = workdir("keyfile-conflict");
+    let src = make_tree(&dir);
+    let archive = dir.join("conflict.plz");
+    let keyfile = dir.join("archive.key");
+    fs::write(&keyfile, [7u8; 32]).unwrap();
+    let (ok, _, err) = run(&[
+        "a",
+        &archive.to_string_lossy(),
+        &src.to_string_lossy(),
+        "--keyfile",
+        &keyfile.to_string_lossy(),
+        "--password=secret",
+    ]);
+    assert!(!ok);
+    assert_eq!(
+        err.trim().lines().count(),
+        1,
+        "ошибка должна быть одной строкой: {err}"
+    );
+    assert!(err.contains("нельзя комбинировать"), "{}", err);
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn pack_list_test_extract() {
     let dir = workdir("roundtrip");
     let src = make_tree(&dir);
@@ -459,6 +484,26 @@ fn recovery_record_roundtrip_and_damage_report() {
         serde_json::json!([20_000 / shard])
     );
     assert_eq!(report["recovery"]["recoverable"], true);
+
+    let (ok, out, err) = run(&["repair", &stamp, "-q"]);
+    assert!(ok, "repair не восстановил архив: {} {}", out, err);
+    let repaired_out = dir.join("repaired-out");
+    let repaired_stamp = repaired_out.to_string_lossy().into_owned();
+    let (ok, out, err) = run(&["x", &stamp, "-o", &repaired_stamp, "-q"]);
+    assert!(ok, "распаковка после repair не удалась: {} {}", out, err);
+    for rel in [
+        "текст.txt",
+        "вложенный/бинарный.bin",
+        "пустой.txt",
+        "шум.bin",
+    ] {
+        assert_eq!(
+            fs::read(src.join(rel)).unwrap(),
+            fs::read(repaired_out.join("данные").join(rel)).unwrap(),
+            "байты после repair не совпали для {}",
+            rel
+        );
+    }
 
     let (ok, _, err) = run(&["a", &stamp, &src_stamp, "--recovery", "0"]);
     assert!(!ok);

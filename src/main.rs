@@ -946,8 +946,8 @@ fn password_for_create(
     file: Option<&Path>,
     keyfile: Option<&Path>,
 ) -> Result<Option<Zeroizing<String>>> {
-    if file.is_some() && keyfile.is_some() {
-        bail!("нельзя одновременно указывать --password-file и --keyfile");
+    if (value.is_some() || file.is_some()) && keyfile.is_some() {
+        bail!("нельзя комбинировать --password/--password-file и --keyfile");
     }
     if let Some(path) = keyfile {
         return Ok(Some(password_from_keyfile(path)?));
@@ -970,8 +970,8 @@ fn password_for_open(
     file: Option<&Path>,
     keyfile: Option<&Path>,
 ) -> Result<Option<Zeroizing<String>>> {
-    if file.is_some() && keyfile.is_some() {
-        bail!("нельзя одновременно указывать --password-file и --keyfile");
+    if (value.is_some() || file.is_some()) && keyfile.is_some() {
+        bail!("нельзя комбинировать --password/--password-file и --keyfile");
     }
     if let Some(path) = keyfile {
         return Ok(Some(password_from_keyfile(path)?));
