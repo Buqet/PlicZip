@@ -705,12 +705,12 @@ pub fn repair_file(path: &Path, show_progress: bool) -> Result<RepairReport> {
         let mut decoder = ReedSolomonDecoder::new(k, m, shard)?;
         let mut data = vec![vec![0u8; shard]; k];
         let mut missing_data = Vec::new();
-        for i in 0..k {
+        for (i, shard_data) in data.iter_mut().enumerate().take(k) {
             let j = plan.data_index(g, i as u64);
-            let ok = read_shard(&source, &plan, j, &mut data[i]).is_ok()
-                && leaf_hash(&data[i]) == table[j as usize];
+            let ok = read_shard(&source, &plan, j, shard_data).is_ok()
+                && leaf_hash(shard_data) == table[j as usize];
             if ok {
-                decoder.add_original_shard(i, &data[i])?;
+                decoder.add_original_shard(i, shard_data)?;
             } else {
                 missing_data.push((i, j));
             }
