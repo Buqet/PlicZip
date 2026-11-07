@@ -320,12 +320,12 @@ fn run(cli: Cli) -> Result<ExitCode> {
             json,
         } => {
             let started = Instant::now();
-            let secret = password_for_create(
-                password.as_deref(),
-                password_file.as_deref(),
-                keyfile.as_deref(),
-            )?;
-            let encrypted = secret.is_some();
+            if keyfile.is_some() && (password.is_some() || password_file.is_some()) {
+                bail!("нельзя комбинировать --password/--password-file и --keyfile");
+            }
+            let key_bytes = keyfile.as_deref().map(password_from_keyfile).transpose()?;
+            let secret = password_for_create(password.as_deref(), password_file.as_deref(), None)?;
+            let encrypted = secret.is_some() || key_bytes.is_some();
 
             let opts = CreateOptions {
                 level,
@@ -335,6 +335,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 follow_links,
                 show_progress: !quiet && !json,
                 password: secret,
+                password_bytes: key_bytes,
                 volume_size,
                 include,
                 exclude,
@@ -422,12 +423,8 @@ fn run(cli: Cli) -> Result<ExitCode> {
             json,
         } => {
             let started = Instant::now();
-            let secret = password_for_open(
-                password.as_deref(),
-                password_file.as_deref(),
-                keyfile.as_deref(),
-            )?;
-            let mut ar = Archive::open_with(&archive, secret.as_deref().map(String::as_str))?;
+            let secret = password_for_open(password.as_deref(), password_file.as_deref(), None)?;
+            let mut ar = open_archive(&archive, secret.as_ref(), keyfile.as_deref())?;
             let opts = reader::ExtractOptions {
                 output,
                 skip_existing,
@@ -476,12 +473,8 @@ fn run(cli: Cli) -> Result<ExitCode> {
             long,
             json,
         } => {
-            let secret = password_for_open(
-                password.as_deref(),
-                password_file.as_deref(),
-                keyfile.as_deref(),
-            )?;
-            let ar = Archive::open_with(&archive, secret.as_deref().map(String::as_str))?;
+            let secret = password_for_open(password.as_deref(), password_file.as_deref(), None)?;
+            let ar = open_archive(&archive, secret.as_ref(), keyfile.as_deref())?;
             let (files, dirs, links) = ar.index.counts();
 
             if json {
@@ -559,12 +552,8 @@ fn run(cli: Cli) -> Result<ExitCode> {
             json,
         } => {
             let started = Instant::now();
-            let secret = password_for_open(
-                password.as_deref(),
-                password_file.as_deref(),
-                keyfile.as_deref(),
-            )?;
-            let mut ar = Archive::open_with(&archive, secret.as_deref().map(String::as_str))?;
+            let secret = password_for_open(password.as_deref(), password_file.as_deref(), None)?;
+            let mut ar = open_archive(&archive, secret.as_ref(), keyfile.as_deref())?;
             let rr_report = ar.verify_recovery(!quiet && !json)?;
             let rr_clean = rr_report.as_ref().is_none_or(|report| report.is_clean());
             if !json {
@@ -626,12 +615,8 @@ fn run(cli: Cli) -> Result<ExitCode> {
             keyfile,
             json,
         } => {
-            let secret = password_for_open(
-                password.as_deref(),
-                password_file.as_deref(),
-                keyfile.as_deref(),
-            )?;
-            let ar = Archive::open_with(&archive, secret.as_deref().map(String::as_str))?;
+            let secret = password_for_open(password.as_deref(), password_file.as_deref(), None)?;
+            let ar = open_archive(&archive, secret.as_ref(), keyfile.as_deref())?;
             let index = &ar.index;
             let (files, dirs, links) = index.counts();
             let raw = index.total_size();
@@ -802,16 +787,25 @@ fn run(cli: Cli) -> Result<ExitCode> {
         }
 
         Cmd::Keygen { path, bytes } => {
-            let mut key = vec![0u8; bytes];
+            let mut key = Zeroizing::new(vec![0u8; bytes]);
             getrandom::getrandom(&mut key)
                 .map_err(|err| anyhow::anyhow!("не удалось создать случайный keyfile: {err}"))?;
-            std::fs::OpenOptions::new()
+            let mut file = std::fs::OpenOptions::new()
                 .write(true)
                 .create_new(true)
                 .open(&path)
-                .with_context(|| format!("не удалось создать keyfile {:?}", path))?
-                .write_all(&key)
-                .with_context(|| format!("не удалось записать keyfile {:?}", path))?;
+                .with_context(|| format!("не удалось создать keyfile {:?}", path))?;
+            let write_result = (|| -> Result<()> {
+                file.write_all(&key)
+                    .with_context(|| format!("не удалось записать keyfile {:?}", path))?;
+                file.sync_all()
+                    .with_context(|| format!("не удалось синхронизировать keyfile {:?}", path))?;
+                Ok(())
+            })();
+            if let Err(err) = write_result {
+                let _ = std::fs::remove_file(&path);
+                return Err(err);
+            }
             println!("Создан keyfile {} ({} байт)", path.display(), bytes);
             Ok(ExitCode::SUCCESS)
         }
@@ -922,13 +916,28 @@ fn password_from_file(path: &Path) -> Result<Zeroizing<String>> {
 }
 
 /// Читает произвольный бинарный keyfile и кодирует его без потери байтов.
-fn password_from_keyfile(path: &Path) -> Result<Zeroizing<String>> {
+fn password_from_keyfile(path: &Path) -> Result<Zeroizing<Vec<u8>>> {
     let bytes =
         std::fs::read(path).with_context(|| format!("не удалось прочитать keyfile {:?}", path))?;
     if bytes.is_empty() {
         bail!("keyfile {:?} пуст", path);
     }
-    Ok(Zeroizing::new(hex(&bytes)))
+    Ok(Zeroizing::new(bytes))
+}
+
+fn open_archive(
+    archive: &Path,
+    password: Option<&Zeroizing<String>>,
+    keyfile: Option<&Path>,
+) -> Result<Archive> {
+    if password.is_some() && keyfile.is_some() {
+        bail!("нельзя комбинировать --password/--password-file и --keyfile");
+    }
+    if let Some(keyfile_path) = keyfile {
+        let key = password_from_keyfile(keyfile_path)?;
+        return Archive::open_with_bytes(archive, &key);
+    }
+    Archive::open_with(archive, password.map(|value| value.as_str()))
 }
 
 fn password_from_env() -> Option<Zeroizing<String>> {
@@ -948,9 +957,6 @@ fn password_for_create(
 ) -> Result<Option<Zeroizing<String>>> {
     if (value.is_some() || file.is_some()) && keyfile.is_some() {
         bail!("нельзя комбинировать --password/--password-file и --keyfile");
-    }
-    if let Some(path) = keyfile {
-        return Ok(Some(password_from_keyfile(path)?));
     }
     if let Some(path) = file {
         return Ok(Some(password_from_file(path)?));
@@ -972,9 +978,6 @@ fn password_for_open(
 ) -> Result<Option<Zeroizing<String>>> {
     if (value.is_some() || file.is_some()) && keyfile.is_some() {
         bail!("нельзя комбинировать --password/--password-file и --keyfile");
-    }
-    if let Some(path) = keyfile {
-        return Ok(Some(password_from_keyfile(path)?));
     }
     if let Some(path) = file {
         return Ok(Some(password_from_file(path)?));

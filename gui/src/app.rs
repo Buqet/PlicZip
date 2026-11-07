@@ -22,6 +22,7 @@ pub struct Meta {
     pub encrypted: bool,
     pub volumes: usize,
     pub archive_bytes: u64,
+    pub recovery: Option<(u32, u64, u64)>,
 }
 
 pub struct Loaded {
@@ -273,6 +274,13 @@ impl App {
                         .filter_map(|p| std::fs::metadata(p).ok())
                         .map(|m| m.len())
                         .sum(),
+                    recovery: ar.recovery.as_ref().map(|trailer| {
+                        (
+                            trailer.plan.percent,
+                            trailer.plan.data_shards,
+                            trailer.plan.parity_shards,
+                        )
+                    }),
                 };
                 self.loaded = Some(Loaded {
                     path,
@@ -352,6 +360,21 @@ impl App {
         });
     }
 
+    /// Восстанавливает повреждённые куски по recovery record; пароль не нужен.
+    pub fn spawn_repair(&mut self) {
+        let Some(loaded) = self.loaded.as_ref() else {
+            return;
+        };
+        let path = loaded.path.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.rx = Some(rx);
+        self.op = Some(OpState::new("восстановление", 0));
+        std::thread::spawn(move || {
+            let report = pliczip::recovery::repair_file(&path, false).map_err(|e| format!("{e:#}"));
+            let _ = tx.send(Msg::Done(Box::new(Done::Repair { report })));
+        });
+    }
+
     pub fn spawn_create(&mut self, dlg: &CreateDlg) -> Result<(), String> {
         let output = PathBuf::from(dlg.output.trim());
         if output.as_os_str().is_empty() {
@@ -386,6 +409,7 @@ impl App {
             solid,
             comment,
             password,
+            password_bytes: None,
             volume_size,
             show_progress: false,
             progress: Some(std::sync::Arc::new(sink)),
@@ -540,6 +564,26 @@ impl App {
                         hint: "Восстанови повреждённый файл из исходника или пересоздай архив \
                                из целой копии. Остальные файлы, скорее всего, в порядке."
                             .into(),
+                    };
+                }
+            },
+            Done::Repair { report } => match report {
+                Ok(report) => {
+                    let text = format!(
+                        "восстановлено: {} data, {} parity",
+                        report.restored_data, report.restored_parity
+                    );
+                    self.notify(text.clone(), true);
+                    self.last_action = Some(text);
+                    if let Some(loaded) = &mut self.loaded {
+                        loaded.integrity = Integrity::Untested;
+                    }
+                }
+                Err(err) => {
+                    self.modal = Modal::Error {
+                        title: "Восстановление не удалось".into(),
+                        message: err,
+                        hint: "Проверь, что parity достаточно для восстановления.".into(),
                     };
                 }
             },

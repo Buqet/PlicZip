@@ -84,6 +84,20 @@ pub fn menu_bar(app: &mut App, ui: &mut egui::Ui) {
                         app.spawn_test();
                     }
                     if ui
+                        .add_enabled(
+                            ready
+                                && app
+                                    .loaded
+                                    .as_ref()
+                                    .is_some_and(|a| a.meta.recovery.is_some()),
+                            egui::Button::new("Восстановить recovery record"),
+                        )
+                        .clicked()
+                    {
+                        ui.close();
+                        app.spawn_repair();
+                    }
+                    if ui
                         .add_enabled(app.loaded.is_some(), egui::Button::new("Найти…    Ctrl+F"))
                         .clicked()
                     {
@@ -322,6 +336,14 @@ pub fn archive_header(app: &mut App, ui: &mut egui::Ui, p: Palette) {
                         let vols = plural_ru(loaded.meta.volumes, "том", "тома", "томов");
                         widgets::chip(ui, Some(Icon::Layers), &vols, p.muted);
                     }
+                    if let Some((percent, _, parity)) = loaded.meta.recovery {
+                        widgets::chip(
+                            ui,
+                            Some(Icon::Shield),
+                            &format!("recovery {percent}% · {parity} parity"),
+                            p.ok,
+                        );
+                    }
                     if index.solid {
                         widgets::chip(ui, None, "solid", p.muted);
                     }
@@ -524,6 +546,14 @@ fn archive_card(app: &App, ui: &mut egui::Ui, p: Palette) {
         );
         if loaded.meta.encrypted {
             kv(ui, "Шифр", "ChaCha20-Poly1305", p);
+        }
+        if let Some((percent, data, parity)) = loaded.meta.recovery {
+            kv(
+                ui,
+                "Восстановление",
+                &format!("{percent}% · {data}+{parity} кусков"),
+                p,
+            );
         }
         if loaded.meta.archive_bytes > 0 {
             kv(

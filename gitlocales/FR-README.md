@@ -273,7 +273,8 @@ Principes en bref : l'éclair comme métaphore du nom, le laiton comme seul acce
 Une liste honnête, pour ne pas chercher :
 
 - **recovery record** — disponible pour les archives à un seul fichier ; `repair`
-récupère les données lorsque le parity est suffisant ;
+récupère les données lorsque le parity est suffisant. `repair` travaille sur les octets
+protégés du recovery record et ne demande donc pas le mot de passe ;
 - **déduplication** — les fichiers identiques sont encore stockés séparément, bien que les
 hachages existent déjà pour cela ;
 - **lecture depuis stdin** — à cause de l'index en fin de fichier ;
@@ -324,7 +325,7 @@ La mémoire est bornée : les blocs jusqu'à 32 MiB sont assemblés en mémoire 
 ## Développement
 
 ```
-cargo test --workspace   # 104 tests : unitaires, CLI, sécurité, GUI, doctest
+cargo test --workspace   # 129 tests : unitaires, CLI, sécurité, GUI, doctest
 cargo build --release
 ```
 
@@ -339,4 +340,3 @@ ar.extract(&ExtractOptions { output: dir, ..Default::default() })?;
 ```
 
 Licence : MIT OR Apache-2.0.
-

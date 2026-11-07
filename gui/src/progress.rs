@@ -30,6 +30,10 @@ pub enum Done {
     Extract { stats: Result<ExtractStats, String> },
     /// Проверка целостности.
     Test { report: Result<TestReport, String> },
+    /// Восстановление recovery record.
+    Repair {
+        report: Result<pliczip::recovery::RepairReport, String>,
+    },
     /// Создание архива.
     Create {
         path: std::path::PathBuf,

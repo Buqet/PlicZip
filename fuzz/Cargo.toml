@@ -10,7 +10,6 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 pliczip = { path = ".." }
-tempfile = "3"
 
 [[bin]]
 name = "paths"

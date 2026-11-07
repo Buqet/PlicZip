@@ -145,20 +145,55 @@ impl Archive {
     /// Открывает архив, беря пароль из аргумента или спрашивая его.
     pub fn open_with(path: &Path, password: Option<&str>) -> Result<Self> {
         let (raw, sources) = source::open_raw(path)?;
+        Self::from_source(
+            path.to_path_buf(),
+            raw,
+            sources,
+            password.map(str::as_bytes),
+        )
+    }
+
+    /// Открывает архив с бинарным паролем, не преобразуя keyfile в текст.
+    pub fn open_with_bytes(path: &Path, password: &[u8]) -> Result<Self> {
+        let (raw, sources) = source::open_raw(path)?;
+        Self::from_source(path.to_path_buf(), raw, sources, Some(password))
+    }
+
+    /// Открывает архив из байтов в памяти без создания временного файла.
+    pub fn from_bytes(data: &[u8]) -> Result<Self> {
+        Self::from_bytes_with(data, None)
+    }
+
+    /// Открывает архив из памяти с явным бинарным паролем.
+    pub fn from_bytes_with(data: &[u8], password: Option<&[u8]>) -> Result<Self> {
+        Self::from_source(
+            PathBuf::from("<memory>"),
+            Box::new(source::BytesSource::new(data)),
+            Vec::new(),
+            password,
+        )
+    }
+
+    fn from_source(
+        path: PathBuf,
+        raw: Box<dyn Source>,
+        sources: Vec<PathBuf>,
+        password: Option<&[u8]>,
+    ) -> Result<Self> {
         let (src, recovery) = crate::recovery::protect(raw)?;
         let layout = format::inspect(src.as_ref())?;
 
         let key = if layout.encrypted {
-            let password = crypto::password(password, "Пароль архива")?;
+            let password = match password {
+                Some(value) if !value.is_empty() => value.to_vec(),
+                Some(_) => anyhow::bail!("пустой пароль недопустим"),
+                None => crypto::password(None, "Пароль архива")?.as_bytes().to_vec(),
+            };
             let params = layout
                 .crypto
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("в архиве нет параметров шифрования"))?;
-            Some(crypto::derive_key(
-                password.as_bytes(),
-                &params.salt,
-                &params.kdf,
-            )?)
+            Some(crypto::derive_key(&password, &params.salt, &params.kdf)?)
         } else {
             None
         };
@@ -166,7 +201,7 @@ impl Archive {
         let parsed = format::read_index(src.as_ref(), &layout, key.as_deref())?;
 
         Ok(Archive {
-            path: path.to_path_buf(),
+            path,
             sources,
             src,
             index: parsed.index,

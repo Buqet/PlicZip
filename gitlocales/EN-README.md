@@ -288,20 +288,24 @@ Decisions and rationale — in [`docs/design.md`](https://docs/design.md), the m
 
 Principles in brief: the lightning bolt as a metaphor for the name, brass as the only accent, green and red reserved for integrity, and a permanent "Integrity confirmed" badge in the main window — because that is the one thing that essentially distinguishes PlicZip from 7-Zip.
 
-## What's missing
+## Implemented features with limits
 
-An honest list, so you don't go looking:
+These features are available with the following limits:
 
 - **recovery record** — use `--recovery PERCENT` and `pliczip repair` to repair
 damage while enough parity remains;
-- **deduplication** — identical files are still stored separately, though the
-hashes for it already exist;
-- **stdin reading** — because of the index at the end;
-- **non-UTF-8 names** — a path that can't be represented as UTF-8 isn't archived;
-- **archive modification** — files can't be added to or removed from a
-finished archive (the "Modify" button in the GUI is empty for now);
 - **Explorer integration** — available on Windows through the GUI's
 `--install-context-menu` command;
+
+`repair` works on the already protected recovery bytes and therefore does not
+need the archive password, even when the archive itself is encrypted.
+
+## What's missing
+
+- **deduplication** — identical files are still stored separately;
+- **stdin reading** — because of the index at the end;
+- **non-UTF-8 names** — a path that can't be represented as UTF-8 isn't archived;
+- **archive modification** — files can't be added to or removed from a finished archive;
 - **archive digital signature**;
 - **name-only encryption** without encrypting data — deliberately not done: it
 creates a false sense of protection.
@@ -344,7 +348,7 @@ Memory is bounded: blocks up to 32 MiB are assembled in memory and compressed in
 ## Development
 
 ```
-cargo test --workspace   # 104 tests: unit, CLI, security, GUI, doc-test
+cargo test --workspace   # 129 tests: unit, CLI, security, GUI, doc-test
 cargo build --release
 ```
 

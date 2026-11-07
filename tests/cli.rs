@@ -91,6 +91,41 @@ fn keyfile_and_password_conflict_is_one_line_error() {
 }
 
 #[test]
+fn binary_keyfile_roundtrips_without_text_encoding() {
+    let dir = workdir("binary-keyfile");
+    let src = make_tree(&dir);
+    let archive = dir.join("encrypted.plz");
+    let keyfile = dir.join("binary.key");
+    fs::write(&keyfile, [0u8, 0xff, 0x80, 0x01, 0xfe, 0x7f]).unwrap();
+    let args = [
+        "a",
+        &archive.to_string_lossy(),
+        &src.to_string_lossy(),
+        "--keyfile",
+        &keyfile.to_string_lossy(),
+        "-q",
+    ];
+    let (ok, _, err) = run(&args);
+    assert!(ok, "создание с бинарным keyfile не удалось: {}", err);
+    let out = dir.join("out");
+    let (ok, _, err) = run(&[
+        "x",
+        &archive.to_string_lossy(),
+        "--keyfile",
+        &keyfile.to_string_lossy(),
+        "-o",
+        &out.to_string_lossy(),
+        "-q",
+    ]);
+    assert!(ok, "распаковка с бинарным keyfile не удалась: {}", err);
+    assert_eq!(
+        fs::read(src.join("вложенный/бинарный.bin")).unwrap(),
+        fs::read(out.join("данные/вложенный/бинарный.bin")).unwrap()
+    );
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn pack_list_test_extract() {
     let dir = workdir("roundtrip");
     let src = make_tree(&dir);

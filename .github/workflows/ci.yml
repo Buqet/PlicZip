@@ -55,3 +55,5 @@ jobs:
         run: cargo fuzz build open
       - name: Fuzz paths (20 секунд)
         run: cargo fuzz run paths -- -max_total_time=20
+      - name: Fuzz open (20 секунд)
+        run: cargo fuzz run open -- -max_total_time=20

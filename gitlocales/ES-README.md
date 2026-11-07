@@ -43,6 +43,9 @@ pliczip repair backup.plz
 
 `test` informa de los fragmentos dañados sin modificar el archivo. `repair` reconstruye los fragmentos dañados cuando el registro parity contiene suficientes datos y vuelve a escribir los dos trailers. Si la tabla de hashes o demasiados fragmentos están dañados, el comando se detiene sin afirmar que el archivo está reparado.
 
+`repair` trabaja sobre los bytes protegidos del registro de recuperación y no
+necesita la contraseña, incluso cuando el archivo está cifrado.
+
 ## Comprobar actualizaciones
 
 No es necesario revisar GitHub manualmente:
@@ -82,9 +85,11 @@ El proyecto incluye CI para formato, auditoría, tests de todo el workspace y Cl
 ```text
 cargo install cargo-fuzz
 cargo fuzz run paths
+cargo fuzz run open
 ```
 
-El target `paths` prueba las validaciones de rutas de archivos y enlaces contra entradas arbitrarias.
+Los targets `paths` y `open` prueban, respectivamente, las validaciones de rutas
+contra entradas arbitrarias y la apertura completa de archivos desde bytes.
 
 ## GUI
 
@@ -100,6 +105,11 @@ MIT OR Apache-2.0.
 
 El target de fuzzing necesita Rust nightly: `rustup toolchain install nightly && RUSTUP_TOOLCHAIN=nightly cargo fuzz run paths -- -max_total_time=60`.
 
+## Funciones implementadas con límites
+
+La recuperación con `--recovery` y `repair`, además del menú contextual de
+Windows, ya están implementados para archivos de un solo volumen.
+
 ## Lo que aún falta
 
 - Modificar un archivo `.plz` ya terminado (el botón «Modificar» de la GUI todavía está reservado).
@@ -108,5 +118,3 @@ El target de fuzzing necesita Rust nightly: `rustup toolchain install nightly &&
 - Nombres de archivo que no puedan representarse en UTF-8.
 - Firma digital del archivo.
 - Cifrado solo de nombres sin cifrar los datos.
-
-La recuperación mediante `--recovery` y `repair`, así como el menú contextual de Windows, ya están implementados para archivos de un solo volumen.

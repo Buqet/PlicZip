@@ -275,7 +275,8 @@ Prinzipien kurz: der Blitz als Metapher des Namens, Messing als einziger Akzent,
 Eine ehrliche Liste, damit du nicht suchen musst:
 
 - **recovery record** — für Einzeldatei-Archive implementiert; `repair` stellt beschädigte
-Daten wieder her, wenn genügend Parity vorhanden ist;
+Daten wieder her, wenn genügend Parity vorhanden ist. `repair` arbeitet auf den geschützten
+Recovery-Bytes und benötigt deshalb auch bei verschlüsselten Archiven kein Passwort;
 - **Deduplizierung** — identische Dateien werden noch separat gespeichert, obwohl die
 Hashes dafür bereits vorhanden sind;
 - **Lesen aus stdin** — wegen des Index am Ende;

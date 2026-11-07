@@ -42,6 +42,36 @@ pub trait Source {
     }
 }
 
+/// Источник байтов в памяти, используемый API и fuzzing без временных файлов.
+pub struct BytesSource {
+    data: std::sync::Arc<[u8]>,
+}
+
+impl BytesSource {
+    /// Создаёт источник, копируя входные байты.
+    pub fn new(data: &[u8]) -> Self {
+        Self {
+            data: std::sync::Arc::from(data),
+        }
+    }
+}
+
+impl Source for BytesSource {
+    fn len(&self) -> u64 {
+        self.data.len() as u64
+    }
+
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<usize> {
+        let offset = offset as usize;
+        if offset >= self.data.len() {
+            return Ok(0);
+        }
+        let count = buf.len().min(self.data.len() - offset);
+        buf[..count].copy_from_slice(&self.data[offset..offset + count]);
+        Ok(count)
+    }
+}
+
 /// Один файл.
 pub struct FileSource {
     file: File,

@@ -6,7 +6,7 @@ on:
     - cron: "17 3 * * 0"
 
 jobs:
-  paths:
+  fuzz:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -14,7 +14,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
-      - name: Build fuzz target
+      - name: Build fuzz targets
         run: cargo fuzz build paths
-      - name: Run fuzz target
+      - name: Build open fuzz target
+        run: cargo fuzz build open
+      - name: Run paths fuzz target
         run: cargo fuzz run paths -- -max_total_time=60
+      - name: Run open fuzz target
+        run: cargo fuzz run open -- -max_total_time=60

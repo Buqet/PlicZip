@@ -55,6 +55,8 @@ pub struct CreateOptions {
     pub show_progress: bool,
     /// Пароль: если задан, архив шифруется.
     pub password: Option<Zeroizing<String>>,
+    /// Бинарный пароль из keyfile; имеет приоритет над текстовым паролем.
+    pub password_bytes: Option<Zeroizing<Vec<u8>>>,
     /// Размер тома; `None` — писать одним файлом.
     pub volume_size: Option<u64>,
     /// Маски «включить только это».
@@ -77,6 +79,7 @@ impl Default for CreateOptions {
             follow_links: false,
             show_progress: true,
             password: None,
+            password_bytes: None,
             volume_size: None,
             include: Vec::new(),
             exclude: Vec::new(),
@@ -672,12 +675,18 @@ pub fn create(output: &Path, inputs: &[PathBuf], opts: &CreateOptions) -> Result
     }
 
     // Ключ и параметры шифрования (соль и база nonce — случайные на архив).
-    let crypto_setup = match &opts.password {
-        Some(password) => {
+    let crypto_setup = match opts
+        .password_bytes
+        .as_ref()
+        .map(|password| password.as_slice())
+        .or_else(|| opts.password.as_ref().map(|password| password.as_bytes()))
+    {
+        Some(password) if !password.is_empty() => {
             let params = CryptoParams::generate()?;
-            let key = crypto::derive_key(password.as_bytes(), &params.salt, &params.kdf)?;
+            let key = crypto::derive_key(password, &params.salt, &params.kdf)?;
             Some((params, key))
         }
+        Some(_) => bail!("пустой пароль недопустим"),
         None => None,
     };
     let encrypted = crypto_setup.is_some();
