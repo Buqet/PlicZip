@@ -20,6 +20,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Форматирование
         run: cargo fmt --all -- --check
+      - name: Установка cargo-audit
+        run: cargo install cargo-audit --locked
       - name: Аудит зависимостей
         run: cargo audit --ignore RUSTSEC-2026-0245
       - name: Тесты всего workspace
