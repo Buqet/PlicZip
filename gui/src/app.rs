@@ -195,6 +195,8 @@ pub struct App {
     pub toast: Option<Toast>,
     /// Поставить фокус в поле поиска на следующем кадре (Ctrl+F).
     pub focus_search: bool,
+    /// Последний заголовок, отправленный платформенному окну.
+    window_title: String,
 }
 
 impl App {
@@ -216,6 +218,7 @@ impl App {
             sort_desc: false,
             toast: None,
             focus_search: false,
+            window_title: "PlicZip".into(),
         };
         if let Some(path) = startup_archive {
             app.begin_open(path);
@@ -767,15 +770,19 @@ impl eframe::App for App {
         self.handle_dnd(&ctx);
 
         let p = theme::current();
-        if let Some(loaded) = &self.loaded {
+        let title = if let Some(loaded) = &self.loaded {
             let name = loaded
                 .path
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default();
-            ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!("{name} — PlicZip")));
+            format!("{name} — PlicZip")
         } else {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Title("PlicZip".into()));
+            "PlicZip".into()
+        };
+        if self.window_title != title {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
+            self.window_title = title;
         }
         self.shortcuts(&ctx);
         let busy = self.op.is_some();
