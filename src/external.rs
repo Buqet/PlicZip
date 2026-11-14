@@ -1,7 +1,7 @@
 //! Read-only support for external archive formats.
 //!
 //! Archive creation remains exclusively in `.plz`. This module only detects,
-//! lists, verifies and extracts 7z and RAR files.
+//! lists, verifies and extracts ZIP, 7z and RAR files.
 
 use anyhow::{bail, Context, Result};
 use std::fs::{self, File, OpenOptions};
@@ -14,10 +14,13 @@ use crate::safety::{join_safe, validate_rel_path};
 
 const SEVEN_Z_SIGNATURE: &[u8] = b"7z\xbc\xaf\x27\x1c";
 const RAR_SIGNATURE: &[u8] = b"Rar!\x1a\x07";
+const ZIP_SIGNATURES: &[&[u8]] = &[b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"];
 
 /// Supported external archive kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
+    /// ZIP archive.
+    Zip,
     /// 7z archive.
     SevenZip,
     /// RAR 1.3 through RAR 5 archive.
@@ -28,6 +31,7 @@ impl Kind {
     /// Human-readable format name.
     pub fn name(self) -> &'static str {
         match self {
+            Self::Zip => "ZIP",
             Self::SevenZip => "7z",
             Self::Rar => "RAR",
         }
@@ -73,6 +77,12 @@ pub fn detect(path: &Path) -> Result<Option<Kind>> {
     if header.len() >= RAR_SIGNATURE.len() && header.starts_with(RAR_SIGNATURE) {
         return Ok(Some(Kind::Rar));
     }
+    if ZIP_SIGNATURES
+        .iter()
+        .any(|signature| header.len() >= signature.len() && header.starts_with(signature))
+    {
+        return Ok(Some(Kind::Zip));
+    }
     Ok(None)
 }
 
@@ -80,6 +90,7 @@ pub fn detect(path: &Path) -> Result<Option<Kind>> {
 pub fn list(path: &Path, password: Option<&[u8]>) -> Result<(Kind, Vec<Entry>)> {
     let kind = detect(path)?.context("формат архива не поддерживается")?;
     let entries = match kind {
+        Kind::Zip => list_zip(path, password)?,
         Kind::SevenZip => list_7z(path, password)?,
         Kind::Rar => list_rar(path, password)?,
     };
@@ -95,6 +106,7 @@ pub fn extract(
 ) -> Result<(Kind, Stats)> {
     let kind = detect(path)?.context("формат архива не поддерживается")?;
     let stats = match kind {
+        Kind::Zip => extract_zip(path, output, password, skip_existing)?,
         Kind::SevenZip => extract_7z(path, output, password, skip_existing)?,
         Kind::Rar => extract_rar(path, output, password, skip_existing)?,
     };
@@ -105,6 +117,7 @@ pub fn extract(
 pub fn test(path: &Path, password: Option<&[u8]>) -> Result<(Kind, usize)> {
     let kind = detect(path)?.context("формат архива не поддерживается")?;
     let count = match kind {
+        Kind::Zip => test_zip(path, password)?,
         Kind::SevenZip => test_7z(path, password)?,
         Kind::Rar => test_rar(path, password)?,
     };
@@ -134,6 +147,100 @@ fn password_7z(password: Option<&[u8]>) -> sevenz_rust::Password {
         }
         _ => sevenz_rust::Password::empty(),
     }
+}
+
+fn zip_options(password: Option<&[u8]>) -> zip::read::ZipReadOptions<'_> {
+    zip::read::ZipReadOptions::new().password(password)
+}
+
+fn list_zip(path: &Path, password: Option<&[u8]>) -> Result<Vec<Entry>> {
+    let file =
+        File::open(path).with_context(|| format!("не удалось открыть ZIP-архив {:?}", path))?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|err| anyhow::anyhow!(err))
+        .with_context(|| format!("не удалось прочитать ZIP-архив {:?}", path))?;
+    let mut entries = Vec::with_capacity(archive.len());
+    for index in 0..archive.len() {
+        let entry = archive
+            .by_index_with_options(index, zip_options(password))
+            .map_err(|err| anyhow::anyhow!(err))
+            .with_context(|| format!("не удалось прочитать элемент ZIP #{index}"))?;
+        let raw_name = String::from_utf8_lossy(entry.name_raw()).into_owned();
+        if is_root_entry(&raw_name) {
+            continue;
+        }
+        entries.push(Entry {
+            path: normalized_path(&raw_name)?,
+            size: entry.size(),
+            is_dir: entry.is_dir(),
+        });
+    }
+    Ok(entries)
+}
+
+fn extract_zip(
+    path: &Path,
+    output: &Path,
+    password: Option<&[u8]>,
+    skip_existing: bool,
+) -> Result<Stats> {
+    let file =
+        File::open(path).with_context(|| format!("не удалось открыть ZIP-архив {:?}", path))?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|err| anyhow::anyhow!(err))
+        .with_context(|| format!("не удалось прочитать ZIP-архив {:?}", path))?;
+    let mut stats = Stats::default();
+    for index in 0..archive.len() {
+        let mut entry = archive
+            .by_index_with_options(index, zip_options(password))
+            .map_err(|err| anyhow::anyhow!(err))
+            .with_context(|| format!("не удалось открыть элемент ZIP #{index}"))?;
+        let raw_name = String::from_utf8_lossy(entry.name_raw()).into_owned();
+        if is_root_entry(&raw_name) {
+            continue;
+        }
+        let rel = normalized_path(&raw_name)?;
+        let target = join_safe(output, &rel)?;
+        if entry.is_dir() {
+            fs::create_dir_all(&target)?;
+            stats.dirs += 1;
+            continue;
+        }
+        if skip_existing && target.exists() {
+            stats.skipped += 1;
+            continue;
+        }
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let mut output_file = File::create(&target)?;
+        let copied = io::copy(&mut entry, &mut output_file)?;
+        output_file.sync_all()?;
+        stats.files += 1;
+        stats.bytes = stats.bytes.saturating_add(copied);
+    }
+    Ok(stats)
+}
+
+fn test_zip(path: &Path, password: Option<&[u8]>) -> Result<usize> {
+    let file =
+        File::open(path).with_context(|| format!("не удалось открыть ZIP-архив {:?}", path))?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|err| anyhow::anyhow!(err))
+        .with_context(|| format!("не удалось прочитать ZIP-архив {:?}", path))?;
+    let mut count = 0;
+    for index in 0..archive.len() {
+        let mut entry = archive
+            .by_index_with_options(index, zip_options(password))
+            .map_err(|err| anyhow::anyhow!(err))
+            .with_context(|| format!("не удалось проверить элемент ZIP #{index}"))?;
+        if is_root_entry(&String::from_utf8_lossy(entry.name_raw())) || entry.is_dir() {
+            continue;
+        }
+        io::copy(&mut entry, &mut io::sink())?;
+        count += 1;
+    }
+    Ok(count)
 }
 
 fn list_7z(path: &Path, password: Option<&[u8]>) -> Result<Vec<Entry>> {
@@ -341,6 +448,12 @@ mod tests {
             .write_all(b"Rar!\x1a\x07\x01\x00")
             .unwrap();
         assert_eq!(detect(&rar).unwrap(), Some(Kind::Rar));
+        let zip = dir.join("c.zip");
+        File::create(&zip)
+            .unwrap()
+            .write_all(b"PK\x05\x06\x00\x00\x00\x00\x00\x00\x00\x00")
+            .unwrap();
+        assert_eq!(detect(&zip).unwrap(), Some(Kind::Zip));
         let _ = fs::remove_dir_all(dir);
     }
 
@@ -370,6 +483,34 @@ mod tests {
         let output = root.join("out");
         let (_, stats) = extract(&archive, &output, None, false).unwrap();
         assert_eq!(stats.files, 1);
+        assert_eq!(
+            fs::read(output.join("nested/data.bin")).unwrap(),
+            [0, 1, 2, 3, 255]
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn zip_roundtrip() {
+        let root = std::env::temp_dir().join(format!("pliczip-zip-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let archive = root.join("sample.zip");
+        let mut writer = zip::ZipWriter::new(File::create(&archive).unwrap());
+        let options = zip::write::SimpleFileOptions::default();
+        writer.add_directory("nested/", options).unwrap();
+        writer.start_file("nested/data.bin", options).unwrap();
+        writer.write_all(&[0, 1, 2, 3, 255]).unwrap();
+        writer.finish().unwrap();
+
+        let (kind, entries) = list(&archive, None).unwrap();
+        assert_eq!(kind, Kind::Zip);
+        assert!(entries.iter().any(|entry| entry.path == "nested/data.bin"));
+
+        let output = root.join("out");
+        let (_, stats) = extract(&archive, &output, None, false).unwrap();
+        assert_eq!(stats.files, 1);
+        assert_eq!(test(&archive, None).unwrap().1, 1);
         assert_eq!(
             fs::read(output.join("nested/data.bin")).unwrap(),
             [0, 1, 2, 3, 255]
