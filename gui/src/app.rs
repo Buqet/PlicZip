@@ -59,6 +59,22 @@ pub struct Toast {
     pub at: Instant,
 }
 
+/// Состояние проверки обновлений в GUI.
+#[derive(Clone, Debug, Default)]
+pub enum UpdateState {
+    /// Проверка ещё не запускалась.
+    #[default]
+    Idle,
+    /// Идёт запрос к GitHub Releases.
+    Checking,
+    /// Найдена версия новее текущей.
+    Available { latest: String, url: String },
+    /// Текущая версия актуальна.
+    NotFound,
+    /// Проверка завершилась ошибкой.
+    Error,
+}
+
 /// Сжатый размер элемента: в обычном режиме точный, в solid — доля блока,
 /// пропорциональная размеру файла (иначе сумма по файлам не сойдётся с блоком).
 pub fn packed_size(index: &PzIndex, entry: &PzEntry) -> Option<u64> {
@@ -170,6 +186,7 @@ pub enum Modal {
         hint: String,
     },
     About,
+    Settings,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -180,6 +197,7 @@ pub enum ModalKind {
     Password,
     Error,
     About,
+    Settings,
 }
 
 pub struct App {
@@ -197,6 +215,8 @@ pub struct App {
     pub focus_search: bool,
     /// Последний заголовок, отправленный платформенному окну.
     window_title: String,
+    /// Состояние проверки обновлений.
+    pub update: UpdateState,
 }
 
 impl App {
@@ -219,6 +239,7 @@ impl App {
             toast: None,
             focus_search: false,
             window_title: "PlicZip".into(),
+            update: UpdateState::Idle,
         };
         if let Some(path) = startup_archive {
             app.begin_open(path);
@@ -237,6 +258,7 @@ impl App {
             Modal::Password(_) => ModalKind::Password,
             Modal::Error { .. } => ModalKind::Error,
             Modal::About => ModalKind::About,
+            Modal::Settings => ModalKind::Settings,
         }
     }
 
@@ -500,6 +522,21 @@ impl App {
         });
     }
 
+    /// Запускает фоновую проверку последнего GitHub Release.
+    pub fn spawn_update_check(&mut self) {
+        if self.op.is_some() || matches!(self.update, UpdateState::Checking) {
+            return;
+        }
+        self.update = UpdateState::Checking;
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.rx = Some(rx);
+        self.op = Some(OpState::new("проверка обновлений", 0));
+        std::thread::spawn(move || {
+            let result = pliczip::update::check_latest().map_err(|err| format!("{err:#}"));
+            let _ = tx.send(Msg::Done(Box::new(Done::Update { result })));
+        });
+    }
+
     pub fn spawn_create(&mut self, dlg: &CreateDlg) -> Result<(), String> {
         let output = PathBuf::from(dlg.output.trim());
         if output.as_os_str().is_empty() {
@@ -730,6 +767,31 @@ impl App {
                         title: "Создание не удалось".into(),
                         message: err,
                         hint: "Проверь права на запись и место на диске.".into(),
+                    };
+                }
+            },
+            Done::Update { result } => match result {
+                Ok(release) => {
+                    let current = release.current.clone();
+                    let available =
+                        release.latest != current && release.latest != format!("v{current}");
+                    if available {
+                        self.update = UpdateState::Available {
+                            latest: release.latest.clone(),
+                            url: release.url,
+                        };
+                        self.notify(format!("доступно обновление {}", release.latest), true);
+                    } else {
+                        self.update = UpdateState::NotFound;
+                        self.notify(format!("установлена актуальная версия {current}"), true);
+                    }
+                }
+                Err(err) => {
+                    self.update = UpdateState::Error;
+                    self.modal = Modal::Error {
+                        title: "Проверка обновлений не удалась".into(),
+                        message: err,
+                        hint: "Проверь подключение к интернету и повтори попытку.".into(),
                     };
                 }
             },

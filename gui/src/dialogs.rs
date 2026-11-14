@@ -206,7 +206,21 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
                         .color(p.muted)
                         .monospace(),
                     );
-                    ui.add_space(14.0);
+                    ui.add_space(12.0);
+                    ui.label(
+                        egui::RichText::new("Изменения в текущей версии")
+                            .strong()
+                            .color(p.text),
+                    );
+                    egui::ScrollArea::vertical()
+                        .max_height(190.0)
+                        .auto_shrink([false, true])
+                        .show(ui, |ui| {
+                            for line in CHANGELOG_RU.lines() {
+                                ui.label(egui::RichText::new(line).size(12.0).color(p.muted));
+                            }
+                        });
+                    ui.add_space(10.0);
                     if primary_button(ui, "Закрыть", p).clicked() {
                         close = true;
                     }
@@ -216,8 +230,40 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
                 app.modal = Modal::None;
             }
         }
+        ModalKind::Settings => {
+            let mut close = false;
+            dialog(ctx, "Настройки", Icon::Archive, p.accent, p, |ui| {
+                ui.set_min_width(420.0);
+                ui.horizontal(|ui| {
+                    let _ = ui.selectable_label(true, "Общие");
+                    ui.add_enabled(false, egui::Button::new("Язык"));
+                });
+                ui.separator();
+                ui.label(
+                    egui::RichText::new("Язык интерфейса")
+                        .strong()
+                        .color(p.text),
+                );
+                ui.add_enabled(false, egui::Button::new("Русский (скоро)"));
+                ui.add_space(6.0);
+                ui.label(
+                    egui::RichText::new("Переключение языка пока недоступно.")
+                        .size(12.0)
+                        .color(p.muted),
+                );
+                ui.add_space(14.0);
+                if primary_button(ui, "Закрыть", p).clicked() {
+                    close = true;
+                }
+            });
+            if close || escape {
+                app.modal = Modal::None;
+            }
+        }
     }
 }
+
+const CHANGELOG_RU: &str = "• ZIP: чтение, просмотр, проверка и распаковка\n• 7z и RAR: режим только чтение\n• Безопасная обработка путей внешних архивов\n• Создание архивов только в формате .plz\n• Binary keyfile без преобразования в hex\n• Recovery records и команда repair\n• Windows Explorer: открытие через контекстное меню";
 
 /// Что диалог создания просит сделать дальше.
 enum CreateRequest {

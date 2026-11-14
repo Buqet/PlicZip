@@ -39,6 +39,10 @@ pub enum Done {
         path: std::path::PathBuf,
         stats: Result<CreateStats, String>,
     },
+    /// Проверка обновлений.
+    Update {
+        result: Result<pliczip::update::ReleaseInfo, String>,
+    },
 }
 
 /// Сообщение рабочего потока.

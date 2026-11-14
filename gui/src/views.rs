@@ -128,9 +128,43 @@ pub fn menu_bar(app: &mut App, ui: &mut egui::Ui) {
                             }
                         }
                     });
+                    ui.separator();
+                    if ui
+                        .add_enabled(!busy, egui::Button::new("Настройки…"))
+                        .clicked()
+                    {
+                        ui.close();
+                        app.modal = Modal::Settings;
+                    }
                 });
 
                 egui::menu::MenuButton::new("Справка").ui(ui, |ui| {
+                    let update_label = match &app.update {
+                        crate::app::UpdateState::Checking => "Проверка обновлений…",
+                        crate::app::UpdateState::Available { latest, .. } => {
+                            let _ = latest;
+                            "Обновить"
+                        }
+                        crate::app::UpdateState::NotFound => "Не найдено",
+                        crate::app::UpdateState::Error | crate::app::UpdateState::Idle => {
+                            "Проверить обновления"
+                        }
+                    };
+                    if ui
+                        .add_enabled(
+                            !busy && !matches!(&app.update, crate::app::UpdateState::Checking),
+                            egui::Button::new(update_label),
+                        )
+                        .clicked()
+                    {
+                        ui.close();
+                        if let crate::app::UpdateState::Available { url, .. } = &app.update {
+                            ui.ctx().open_url(egui::OpenUrl::new_tab(url.clone()));
+                        } else {
+                            app.spawn_update_check();
+                        }
+                    }
+                    ui.separator();
                     if ui.button("О программе").clicked() {
                         ui.close();
                         app.modal = Modal::About;
@@ -212,6 +246,32 @@ pub fn toolbar(app: &mut App, ui: &mut egui::Ui, busy: bool) {
                     {
                         app.cfg.dark = !app.cfg.dark;
                         app.cfg.save();
+                    }
+                    let update_label = match &app.update {
+                        crate::app::UpdateState::Checking => "Проверка…",
+                        crate::app::UpdateState::Available { latest, .. } => {
+                            let _ = latest;
+                            "Обновить"
+                        }
+                        crate::app::UpdateState::NotFound => "Не найдено",
+                        crate::app::UpdateState::Error | crate::app::UpdateState::Idle => {
+                            "Проверить обновления"
+                        }
+                    };
+                    if widgets::button(
+                        ui,
+                        None,
+                        update_label,
+                        Btn::Ghost,
+                        !busy && !matches!(&app.update, crate::app::UpdateState::Checking),
+                    )
+                    .clicked()
+                    {
+                        if let crate::app::UpdateState::Available { url, .. } = &app.update {
+                            ui.ctx().open_url(egui::OpenUrl::new_tab(url.clone()));
+                        } else {
+                            app.spawn_update_check();
+                        }
                     }
                     if has {
                         search_box(app, ui, p);
