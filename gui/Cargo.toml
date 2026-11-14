@@ -1,6 +1,6 @@
 [package]
 name = "pliczip-gui"
-version = "0.1.0"
+version = "0.10.115-beta"
 edition = "2021"
 rust-version = "1.85"
 description = "Графическая оболочка PlicZip на egui"
