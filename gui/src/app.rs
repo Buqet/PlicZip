@@ -28,6 +28,8 @@ pub struct Meta {
 pub struct Loaded {
     pub path: PathBuf,
     pub password: Option<Zeroizing<String>>,
+    /// Формат внешнего архива; `None` означает native `.plz`.
+    pub external_kind: Option<pliczip::external::Kind>,
     pub meta: Meta,
     pub integrity: Integrity,
     pub filter: String,
@@ -239,6 +241,18 @@ impl App {
         if self.op.is_some() {
             return;
         }
+        if let Ok(Some(kind)) = pliczip::external::detect(&path) {
+            if pliczip::external::list(&path, None).is_ok() {
+                self.open_external_now(path, kind, None);
+            } else {
+                self.modal = Modal::Password(PwDlg {
+                    path,
+                    password: String::new(),
+                    error: None,
+                });
+            }
+            return;
+        }
         let encrypted = match archive_encrypted(&path) {
             Ok(v) => v,
             Err(err) => {
@@ -262,6 +276,10 @@ impl App {
     }
 
     pub fn open_now(&mut self, path: PathBuf, password: Option<Zeroizing<String>>) {
+        if let Ok(Some(kind)) = pliczip::external::detect(&path) {
+            self.open_external_now(path, kind, password);
+            return;
+        }
         match Archive::open_with(&path, password.as_deref().map(String::as_str)) {
             Ok(ar) => {
                 let meta = Meta {
@@ -285,6 +303,7 @@ impl App {
                 self.loaded = Some(Loaded {
                     path,
                     password,
+                    external_kind: None,
                     meta,
                     integrity: Integrity::Untested,
                     filter: String::new(),
@@ -310,12 +329,83 @@ impl App {
         }
     }
 
+    fn open_external_now(
+        &mut self,
+        path: PathBuf,
+        kind: pliczip::external::Kind,
+        password: Option<Zeroizing<String>>,
+    ) {
+        let password_bytes = password.as_ref().map(|value| value.as_bytes().to_vec());
+        match pliczip::external::list(&path, password_bytes.as_deref()) {
+            Ok((_, entries)) => {
+                let index = pliczip::format::PzIndex {
+                    tool: format!("external:{}", kind.name()),
+                    entries: entries
+                        .iter()
+                        .map(|entry| pliczip::format::PzEntry {
+                            path: entry.path.clone(),
+                            kind: if entry.is_dir {
+                                pliczip::format::Kind::Dir
+                            } else {
+                                pliczip::format::Kind::File
+                            },
+                            size: entry.size,
+                            hash: [0; 32],
+                            mode: 0,
+                            mtime: 0,
+                            block: None,
+                            block_offset: 0,
+                            link: String::new(),
+                        })
+                        .collect(),
+                    ..Default::default()
+                };
+                self.loaded = Some(Loaded {
+                    path: path.clone(),
+                    password,
+                    external_kind: Some(kind),
+                    meta: Meta {
+                        index,
+                        encrypted: password_bytes.is_some(),
+                        volumes: 1,
+                        archive_bytes: std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0),
+                        recovery: None,
+                    },
+                    integrity: Integrity::Untested,
+                    filter: String::new(),
+                    selected: None,
+                    view: (0..entries.len()).collect(),
+                    view_key: None,
+                });
+                self.modal = Modal::None;
+                self.last_action = Some(format!(
+                    "открыт {}-архив · {} элементов",
+                    kind.name(),
+                    entries.len()
+                ));
+            }
+            Err(err) => {
+                if let Modal::Password(pw) = &mut self.modal {
+                    pw.error = Some(format!("{err:#}"));
+                    pw.password.clear();
+                } else {
+                    self.modal = Modal::Error {
+                        title: format!("Не удалось открыть {}-архив", kind.name()),
+                        message: format!("{err:#}"),
+                        hint: "Проверь пароль и целостность внешнего архива.".into(),
+                    };
+                }
+            }
+        }
+    }
+
     pub fn spawn_extract(&mut self, output: PathBuf) {
         let Some(loaded) = self.loaded.as_ref() else {
             return;
         };
         let path = loaded.path.clone();
         let password = loaded.password.clone();
+        let external_kind = loaded.external_kind;
         let total = loaded.meta.index.total_size();
 
         let (sink, tx, rx) = progress::channel_with_sink();
@@ -329,9 +419,28 @@ impl App {
         self.op = Some(OpState::new("распаковка", total));
         self.modal = Modal::None;
         std::thread::spawn(move || {
-            let stats = match Archive::open_with(&path, password.as_deref().map(String::as_str)) {
-                Ok(mut ar) => ar.extract(&opts).map_err(|e| format!("{e:#}")),
-                Err(err) => Err(format!("{err:#}")),
+            let stats = if external_kind.is_some() {
+                let key = password.as_ref().map(|value| value.as_bytes().to_vec());
+                match pliczip::external::extract(
+                    &path,
+                    &opts.output,
+                    key.as_deref(),
+                    opts.skip_existing,
+                ) {
+                    Ok((_, stats)) => Ok(ExtractStats {
+                        files: stats.files,
+                        dirs: stats.dirs,
+                        links: 0,
+                        skipped: stats.skipped,
+                        bytes: stats.bytes,
+                    }),
+                    Err(err) => Err(format!("{err:#}")),
+                }
+            } else {
+                match Archive::open_with(&path, password.as_deref().map(String::as_str)) {
+                    Ok(mut ar) => ar.extract(&opts).map_err(|e| format!("{e:#}")),
+                    Err(err) => Err(format!("{err:#}")),
+                }
             };
             let _ = tx.send(Msg::Done(Box::new(Done::Extract { stats })));
         });
@@ -343,6 +452,7 @@ impl App {
         };
         let path = loaded.path.clone();
         let password = loaded.password.clone();
+        let external_kind = loaded.external_kind;
         let total = loaded.meta.index.total_size();
 
         let (sink, tx, rx) = progress::channel_with_sink();
@@ -350,11 +460,23 @@ impl App {
         self.rx = Some(rx);
         self.op = Some(OpState::new("проверка", total));
         std::thread::spawn(move || {
-            let report = match Archive::open_with(&path, password.as_deref().map(String::as_str)) {
-                Ok(mut ar) => ar
-                    .test(false, 100_000, Some(sink))
-                    .map_err(|e| format!("{e:#}")),
-                Err(err) => Err(format!("{err:#}")),
+            let report = if external_kind.is_some() {
+                let key = password.as_ref().map(|value| value.as_bytes().to_vec());
+                match pliczip::external::test(&path, key.as_deref()) {
+                    Ok((_, files)) => Ok(TestReport {
+                        blocks: 0,
+                        files,
+                        bytes: 0,
+                    }),
+                    Err(err) => Err(format!("{err:#}")),
+                }
+            } else {
+                match Archive::open_with(&path, password.as_deref().map(String::as_str)) {
+                    Ok(mut ar) => ar
+                        .test(false, 100_000, Some(sink))
+                        .map_err(|e| format!("{e:#}")),
+                    Err(err) => Err(format!("{err:#}")),
+                }
             };
             let _ = tx.send(Msg::Done(Box::new(Done::Test { report })));
         });
@@ -489,7 +611,7 @@ impl App {
             return;
         }
         let picked = rfd::FileDialog::new()
-            .add_filter("Архивы PlicZip", &["plz"])
+            .add_filter("Архивы", &["plz", "zip", "7z", "rar"])
             .set_title("Открыть архив")
             .pick_file();
         if let Some(path) = picked {
@@ -622,9 +744,9 @@ impl App {
         if dropped.is_empty() || self.op.is_some() {
             return;
         }
-        if let Some(plz) = dropped.iter().find(|p| is_plz(p)) {
-            let plz = plz.clone();
-            self.begin_open(plz);
+        if let Some(archive) = dropped.iter().find(|p| is_archive_path(p)) {
+            let archive = archive.clone();
+            self.begin_open(archive);
         } else if self.modal_kind() == ModalKind::None {
             self.modal = Modal::Create(CreateDlg::from_sources(dropped));
         }
@@ -727,6 +849,18 @@ pub fn is_plz(path: &Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
         .map(|e| e.eq_ignore_ascii_case("plz"))
+        .unwrap_or(false)
+}
+
+fn is_archive_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| {
+            matches!(
+                e.to_ascii_lowercase().as_str(),
+                "plz" | "zip" | "7z" | "rar"
+            )
+        })
         .unwrap_or(false)
 }
 

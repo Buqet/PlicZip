@@ -344,17 +344,24 @@ pub fn archive_header(app: &mut App, ui: &mut egui::Ui, p: Palette) {
                             p.ok,
                         );
                     }
-                    if index.solid {
+                    if let Some(kind) = loaded.external_kind {
+                        widgets::chip(
+                            ui,
+                            None,
+                            &format!("{} · только чтение", kind.name()),
+                            p.accent,
+                        );
+                    } else if index.solid {
                         widgets::chip(ui, None, "solid", p.muted);
+                        let mut methods: Vec<&str> =
+                            index.blocks.iter().map(|b| b.method.name()).collect();
+                        methods.sort_unstable();
+                        methods.dedup();
+                        if !methods.is_empty() {
+                            widgets::chip(ui, None, &methods.join(" · "), p.muted);
+                        }
+                        widgets::chip(ui, None, &format!("PLZ{}", index.version), p.muted);
                     }
-                    let mut methods: Vec<&str> =
-                        index.blocks.iter().map(|b| b.method.name()).collect();
-                    methods.sort_unstable();
-                    methods.dedup();
-                    if !methods.is_empty() {
-                        widgets::chip(ui, None, &methods.join(" · "), p.muted);
-                    }
-                    widgets::chip(ui, None, &format!("PLZ{}", index.version), p.muted);
                 });
             });
         });
@@ -386,6 +393,26 @@ pub fn side_panel(app: &mut App, ui: &mut egui::Ui, p: Palette) {
 /// Карточка «Сжатие»: кольцо экономии и объёмы.
 fn compression_card(app: &App, ui: &mut egui::Ui, p: Palette) {
     let Some(loaded) = &app.loaded else { return };
+    if let Some(kind) = loaded.external_kind {
+        widgets::card(ui, p, |ui| {
+            widgets::section(ui, "ВНЕШНИЙ АРХИВ", p);
+            ui.add_space(4.0);
+            ui.label(
+                egui::RichText::new(format!(
+                "Формат: {}\nСоздание внешних архивов выполняется только сторонними программами.",
+                kind.name()
+            ))
+                .color(p.text),
+            );
+            ui.add_space(6.0);
+            ui.label(
+                egui::RichText::new("PlicZip работает в режиме чтения, проверки и распаковки.")
+                    .size(11.5)
+                    .color(p.dim),
+            );
+        });
+        return;
+    }
     let index = &loaded.meta.index;
     let raw = index.total_size();
     let stored = index.stored_size();
@@ -530,20 +557,26 @@ fn archive_card(app: &App, ui: &mut egui::Ui, p: Palette) {
         ui.add_space(2.0);
         kv(ui, "Файлов", &files.to_string(), p);
         kv(ui, "Папок", &dirs.to_string(), p);
+        if let Some(kind) = loaded.external_kind {
+            kv(ui, "Формат", kind.name(), p);
+            kv(ui, "Режим", "только чтение", p);
+        }
         if links > 0 {
             kv(ui, "Ссылок", &links.to_string(), p);
         }
         kv(ui, "Блоков", &index.blocks.len().to_string(), p);
-        kv(
-            ui,
-            "Режим",
-            if index.solid {
-                "solid"
-            } else {
-                "обычный"
-            },
-            p,
-        );
+        if loaded.external_kind.is_none() {
+            kv(
+                ui,
+                "Режим",
+                if index.solid {
+                    "solid"
+                } else {
+                    "обычный"
+                },
+                p,
+            );
+        }
         if loaded.meta.encrypted {
             kv(ui, "Шифр", "ChaCha20-Poly1305", p);
         }
