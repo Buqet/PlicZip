@@ -584,10 +584,7 @@ pub fn verify(
 
     let mut table_raw = vec![0u8; leaves * HASH_LEN as usize];
     let table_read = read_lenient(src, &mut table_raw, plan.table_offset());
-    let table: Vec<[u8; 32]> = table_raw
-        .chunks_exact(HASH_LEN as usize)
-        .map(|chunk| chunk.try_into().unwrap())
-        .collect();
+    let table: Vec<[u8; 32]> = table_raw.as_chunks::<32>().0.to_vec();
 
     let total = plan.protected_len + plan.parity_shards * plan.shard_size;
     let mut progress = new_progress("проверка записи", total, show_progress, sink);
@@ -676,10 +673,7 @@ pub fn repair_file(path: &Path, show_progress: bool) -> Result<RepairReport> {
     let plan = trailer.plan.clone();
     let mut table_raw = vec![0u8; plan.leaves() as usize * HASH_LEN as usize];
     source.read_exact_at(&mut table_raw, plan.table_offset())?;
-    let table: Vec<[u8; 32]> = table_raw
-        .chunks_exact(HASH_LEN as usize)
-        .map(|chunk| chunk.try_into().unwrap())
-        .collect();
+    let table: Vec<[u8; 32]> = table_raw.as_chunks::<32>().0.to_vec();
     ensure!(
         merkle_root(&table) == trailer.merkle_root,
         "таблица хешей записи повреждена: восстановление невозможно"

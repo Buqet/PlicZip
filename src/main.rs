@@ -16,7 +16,7 @@ use pliczip::util::{
     format_unix_time, human_bytes, human_duration, pad_left, pad_right, plural, ratio,
     saved_percent,
 };
-use pliczip::{crypto, reader, util, writer};
+use pliczip::{crypto, external, reader, util, writer};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -423,7 +423,44 @@ fn run(cli: Cli) -> Result<ExitCode> {
             json,
         } => {
             let started = Instant::now();
-            let secret = password_for_open(password.as_deref(), password_file.as_deref(), None)?;
+            let secret = password_for_open(
+                password.as_deref(),
+                password_file.as_deref(),
+                keyfile.as_deref(),
+            )?;
+            if external_kind(&archive)?.is_some() {
+                let key = external_password_bytes(secret.as_ref(), keyfile.as_deref())?;
+                let (kind, stats) = external::extract(
+                    &archive,
+                    &output,
+                    key.as_ref().map(|value| value.as_slice()),
+                    skip_existing,
+                )?;
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&serde_json::json!({
+                            "ok": true,
+                            "format": kind.name(),
+                            "files": stats.files,
+                            "dirs": stats.dirs,
+                            "bytes": stats.bytes,
+                            "skipped": stats.skipped,
+                            "seconds": started.elapsed().as_secs_f64(),
+                        }))?
+                    );
+                } else if !quiet {
+                    println!(
+                        "PlicZip: распакован {}-архив: {}, {}, {} за {}",
+                        kind.name(),
+                        plural(stats.files, "файл", "файла", "файлов"),
+                        human_bytes(stats.bytes),
+                        plural(stats.dirs, "каталог", "каталога", "каталогов"),
+                        human_duration(started.elapsed())
+                    );
+                }
+                return Ok(ExitCode::SUCCESS);
+            }
             let mut ar = open_archive(&archive, secret.as_ref(), keyfile.as_deref())?;
             let opts = reader::ExtractOptions {
                 output,
@@ -473,7 +510,18 @@ fn run(cli: Cli) -> Result<ExitCode> {
             long,
             json,
         } => {
-            let secret = password_for_open(password.as_deref(), password_file.as_deref(), None)?;
+            let secret = password_for_open(
+                password.as_deref(),
+                password_file.as_deref(),
+                keyfile.as_deref(),
+            )?;
+            if external_kind(&archive)?.is_some() {
+                let key = external_password_bytes(secret.as_ref(), keyfile.as_deref())?;
+                let (kind, entries) =
+                    external::list(&archive, key.as_ref().map(|value| value.as_slice()))?;
+                print_external_list(&archive, kind, &entries, long, json)?;
+                return Ok(ExitCode::SUCCESS);
+            }
             let ar = open_archive(&archive, secret.as_ref(), keyfile.as_deref())?;
             let (files, dirs, links) = ar.index.counts();
 
@@ -552,7 +600,35 @@ fn run(cli: Cli) -> Result<ExitCode> {
             json,
         } => {
             let started = Instant::now();
-            let secret = password_for_open(password.as_deref(), password_file.as_deref(), None)?;
+            let secret = password_for_open(
+                password.as_deref(),
+                password_file.as_deref(),
+                keyfile.as_deref(),
+            )?;
+            if external_kind(&archive)?.is_some() {
+                let key = external_password_bytes(secret.as_ref(), keyfile.as_deref())?;
+                let (kind, files) =
+                    external::test(&archive, key.as_ref().map(|value| value.as_slice()))?;
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&serde_json::json!({
+                            "ok": true,
+                            "format": kind.name(),
+                            "files": files,
+                            "seconds": started.elapsed().as_secs_f64(),
+                        }))?
+                    );
+                } else if !quiet {
+                    println!(
+                        "  проверен {}-архив: {}, за {}",
+                        kind.name(),
+                        plural(files, "файл", "файла", "файлов"),
+                        human_duration(started.elapsed())
+                    );
+                }
+                return Ok(ExitCode::SUCCESS);
+            }
             let mut ar = open_archive(&archive, secret.as_ref(), keyfile.as_deref())?;
             let rr_report = ar.verify_recovery(!quiet && !json)?;
             let rr_clean = rr_report.as_ref().is_none_or(|report| report.is_clean());
@@ -615,7 +691,50 @@ fn run(cli: Cli) -> Result<ExitCode> {
             keyfile,
             json,
         } => {
-            let secret = password_for_open(password.as_deref(), password_file.as_deref(), None)?;
+            let secret = password_for_open(
+                password.as_deref(),
+                password_file.as_deref(),
+                keyfile.as_deref(),
+            )?;
+            if external_kind(&archive)?.is_some() {
+                let key = external_password_bytes(secret.as_ref(), keyfile.as_deref())?;
+                let (kind, entries) =
+                    external::list(&archive, key.as_ref().map(|value| value.as_slice()))?;
+                let files = entries.iter().filter(|entry| !entry.is_dir).count();
+                let dirs = entries.iter().filter(|entry| entry.is_dir).count();
+                let bytes: u64 = entries
+                    .iter()
+                    .filter(|entry| !entry.is_dir)
+                    .map(|entry| entry.size)
+                    .sum();
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&serde_json::json!({
+                            "archive": archive.to_string_lossy(),
+                            "format": kind.name(),
+                            "encrypted": key.is_some(),
+                            "files": files,
+                            "dirs": dirs,
+                            "bytes": bytes,
+                            "entries": entries.iter().map(|entry| serde_json::json!({
+                                "path": entry.path,
+                                "size": entry.size,
+                                "kind": if entry.is_dir { "dir" } else { "file" },
+                            })).collect::<Vec<_>>(),
+                        }))?
+                    );
+                } else {
+                    println!("Архив: {} ({})", archive.display(), kind.name());
+                    println!(
+                        "  файлов: {}, каталогов: {}, размер: {}",
+                        files,
+                        dirs,
+                        human_bytes(bytes)
+                    );
+                }
+                return Ok(ExitCode::SUCCESS);
+            }
             let ar = open_archive(&archive, secret.as_ref(), keyfile.as_deref())?;
             let index = &ar.index;
             let (files, dirs, links) = index.counts();
@@ -923,6 +1042,72 @@ fn password_from_keyfile(path: &Path) -> Result<Zeroizing<Vec<u8>>> {
         bail!("keyfile {:?} пуст", path);
     }
     Ok(Zeroizing::new(bytes))
+}
+
+fn external_kind(path: &Path) -> Result<Option<external::Kind>> {
+    if path.exists() {
+        external::detect(path)
+    } else {
+        Ok(None)
+    }
+}
+
+fn external_password_bytes(
+    password: Option<&Zeroizing<String>>,
+    keyfile: Option<&Path>,
+) -> Result<Option<Zeroizing<Vec<u8>>>> {
+    if let Some(path) = keyfile {
+        return Ok(Some(password_from_keyfile(path)?));
+    }
+    Ok(password.map(|value| Zeroizing::new(value.as_bytes().to_vec())))
+}
+
+fn print_external_list(
+    archive: &Path,
+    kind: external::Kind,
+    entries: &[external::Entry],
+    long: bool,
+    json: bool,
+) -> Result<()> {
+    if json {
+        let document = serde_json::json!({
+            "archive": archive.to_string_lossy(),
+            "format": kind.name(),
+            "entries": entries.iter().map(|entry| serde_json::json!({
+                "path": entry.path,
+                "kind": if entry.is_dir { "dir" } else { "file" },
+                "size": entry.size,
+            })).collect::<Vec<_>>(),
+        });
+        println!("{}", serde_json::to_string_pretty(&document)?);
+        return Ok(());
+    }
+
+    println!("Архив: {} ({})", archive.display(), kind.name());
+    println!();
+    if long {
+        println!("  {}  Путь", pad_left("Размер", 10));
+    } else {
+        println!("  Путь");
+    }
+    for entry in entries {
+        let name = if entry.is_dir {
+            format!("{}/", entry.path)
+        } else {
+            entry.path.clone()
+        };
+        if long {
+            println!("  {}  {}", pad_left(&human_bytes(entry.size), 10), name);
+        } else {
+            println!("  {}", name);
+        }
+    }
+    println!();
+    println!(
+        "  итого: {}",
+        plural(entries.len(), "элемент", "элемента", "элементов")
+    );
+    Ok(())
 }
 
 fn open_archive(

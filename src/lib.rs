@@ -37,6 +37,7 @@
 
 pub mod compress;
 pub mod crypto;
+pub mod external;
 pub mod format;
 pub mod glob;
 pub mod reader;

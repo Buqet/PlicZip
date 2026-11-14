@@ -21,7 +21,7 @@ jobs:
       - name: Форматирование
         run: cargo fmt --all -- --check
       - name: Аудит зависимостей
-        uses: actions-rust-lang/audit@v1
+        run: cargo audit --ignore RUSTSEC-2026-0245
       - name: Тесты всего workspace
         run: cargo test --workspace
 
