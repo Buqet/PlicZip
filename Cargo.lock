@@ -3203,6 +3203,7 @@ dependencies = [
  "rfd",
  "serde",
  "serde_json",
+ "soml-lang",
  "zeroize",
 ]
 
@@ -4002,6 +4003,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd538fb6910ac1099850255cf94a94df6551fbdd602454387d0adb2d1ca6dead"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "soml-lang"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "225f46c922b782e7355eb4b5c6f4bb0d893c1f4803172717dd8072b4ddd72762"
+dependencies = [
+ "serde_core",
+ "zmij",
 ]
 
 [[package]]

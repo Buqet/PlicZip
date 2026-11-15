@@ -106,7 +106,7 @@ pub fn menu_bar(app: &mut App, ui: &mut egui::Ui) {
                     }
                 });
 
-                egui::menu::MenuButton::new("Вид").ui(ui, |ui| {
+                egui::menu::MenuButton::new(&app.locale.menu_view).ui(ui, |ui| {
                     egui::menu::MenuButton::new("Тема").ui(ui, |ui| {
                         if ui.selectable_label(app.cfg.dark, "Тёмная").clicked() {
                             app.cfg.dark = true;
@@ -130,7 +130,7 @@ pub fn menu_bar(app: &mut App, ui: &mut egui::Ui) {
                     });
                     ui.separator();
                     if ui
-                        .add_enabled(!busy, egui::Button::new("Настройки…"))
+                        .add_enabled(!busy, egui::Button::new(&app.locale.menu_settings))
                         .clicked()
                     {
                         ui.close();
@@ -138,16 +138,16 @@ pub fn menu_bar(app: &mut App, ui: &mut egui::Ui) {
                     }
                 });
 
-                egui::menu::MenuButton::new("Справка").ui(ui, |ui| {
+                egui::menu::MenuButton::new(&app.locale.menu_help).ui(ui, |ui| {
                     let update_label = match &app.update {
-                        crate::app::UpdateState::Checking => "Проверка обновлений…",
+                        crate::app::UpdateState::Checking => &app.locale.update_checking,
                         crate::app::UpdateState::Available { latest, .. } => {
                             let _ = latest;
-                            "Обновить"
+                            &app.locale.update_available
                         }
-                        crate::app::UpdateState::NotFound => "Не найдено",
+                        crate::app::UpdateState::NotFound => &app.locale.update_none,
                         crate::app::UpdateState::Error | crate::app::UpdateState::Idle => {
-                            "Проверить обновления"
+                            &app.locale.update_check
                         }
                     };
                     if ui
@@ -165,7 +165,7 @@ pub fn menu_bar(app: &mut App, ui: &mut egui::Ui) {
                         }
                     }
                     ui.separator();
-                    if ui.button("О программе").clicked() {
+                    if ui.button(&app.locale.menu_about).clicked() {
                         ui.close();
                         app.modal = Modal::About;
                     }
@@ -248,14 +248,14 @@ pub fn toolbar(app: &mut App, ui: &mut egui::Ui, busy: bool) {
                         app.cfg.save();
                     }
                     let update_label = match &app.update {
-                        crate::app::UpdateState::Checking => "Проверка…",
+                        crate::app::UpdateState::Checking => &app.locale.update_checking,
                         crate::app::UpdateState::Available { latest, .. } => {
                             let _ = latest;
-                            "Обновить"
+                            &app.locale.update_available
                         }
-                        crate::app::UpdateState::NotFound => "Не найдено",
+                        crate::app::UpdateState::NotFound => &app.locale.update_none,
                         crate::app::UpdateState::Error | crate::app::UpdateState::Idle => {
-                            "Проверить обновления"
+                            &app.locale.update_check
                         }
                     };
                     if widgets::button(

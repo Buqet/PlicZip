@@ -27,6 +27,14 @@ impl Accent {
     }
 }
 
+/// Язык интерфейса. Переключатель пока хранится в конфиге, но UI ещё отключён.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum Language {
+    #[default]
+    Russian,
+    English,
+}
+
 /// Настройки приложения.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -36,6 +44,9 @@ pub struct Config {
     /// Тёмная тема; `false` — светлая.
     #[serde(default = "default_dark")]
     pub dark: bool,
+    /// Язык интерфейса.
+    #[serde(default)]
+    pub language: Language,
 }
 
 fn default_dark() -> bool {
@@ -47,6 +58,7 @@ impl Default for Config {
         Config {
             accent: Accent::Brass,
             dark: true,
+            language: Language::Russian,
         }
     }
 }
@@ -100,11 +112,13 @@ mod tests {
         let cfg = Config {
             accent: Accent::Steel,
             dark: false,
+            language: Language::English,
         };
         let text = serde_json::to_string(&cfg).unwrap();
         let back: Config = serde_json::from_str(&text).unwrap();
         assert_eq!(back.accent, Accent::Steel);
         assert!(!back.dark);
+        assert_eq!(back.language, Language::English);
     }
 
     #[test]
@@ -112,6 +126,7 @@ mod tests {
         let cfg: Config = serde_json::from_str("{}").unwrap();
         assert_eq!(cfg.accent, Accent::Brass);
         assert!(cfg.dark);
+        assert_eq!(cfg.language, Language::Russian);
     }
 
     #[test]

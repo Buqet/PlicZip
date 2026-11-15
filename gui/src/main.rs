@@ -10,6 +10,7 @@ mod app;
 mod config;
 mod dialogs;
 mod icon;
+mod locale;
 mod progress;
 mod theme;
 mod views;

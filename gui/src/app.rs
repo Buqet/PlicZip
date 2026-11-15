@@ -7,6 +7,7 @@ use std::time::Instant;
 use zeroize::Zeroizing;
 
 use crate::config::Config;
+use crate::locale::Locale;
 use crate::progress::{self, Done, Msg, OpState};
 use crate::{dialogs, theme, views};
 
@@ -217,6 +218,8 @@ pub struct App {
     window_title: String,
     /// Состояние проверки обновлений.
     pub update: UpdateState,
+    /// Локаль, загруженная из встроенного SOML-файла.
+    pub locale: Locale,
 }
 
 impl App {
@@ -226,6 +229,7 @@ impl App {
         startup_sources: Option<PathBuf>,
     ) -> Self {
         let cfg = Config::load();
+        let locale = Locale::load(cfg.language);
         theme::apply(&cc.egui_ctx, &cfg);
         let mut app = App {
             cfg,
@@ -240,6 +244,7 @@ impl App {
             focus_search: false,
             window_title: "PlicZip".into(),
             update: UpdateState::Idle,
+            locale,
         };
         if let Some(path) = startup_archive {
             app.begin_open(path);

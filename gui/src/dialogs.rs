@@ -185,7 +185,7 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
             let mut close = false;
             dialog(
                 ctx,
-                "О программе",
+                &app.locale.menu_about,
                 Icon::Archive,
                 p.accent,
                 p,
@@ -208,7 +208,7 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
                     );
                     ui.add_space(12.0);
                     ui.label(
-                        egui::RichText::new("Изменения в текущей версии")
+                        egui::RichText::new(&app.locale.about_changes)
                             .strong()
                             .color(p.text),
                     );
@@ -221,7 +221,7 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
                             }
                         });
                     ui.add_space(10.0);
-                    if primary_button(ui, "Закрыть", p).clicked() {
+                    if primary_button(ui, &app.locale.about_close, p).clicked() {
                         close = true;
                     }
                 },
@@ -232,30 +232,42 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
         }
         ModalKind::Settings => {
             let mut close = false;
-            dialog(ctx, "Настройки", Icon::Archive, p.accent, p, |ui| {
-                ui.set_min_width(420.0);
-                ui.horizontal(|ui| {
-                    let _ = ui.selectable_label(true, "Общие");
-                    ui.add_enabled(false, egui::Button::new("Язык"));
-                });
-                ui.separator();
-                ui.label(
-                    egui::RichText::new("Язык интерфейса")
-                        .strong()
-                        .color(p.text),
-                );
-                ui.add_enabled(false, egui::Button::new("Русский (скоро)"));
-                ui.add_space(6.0);
-                ui.label(
-                    egui::RichText::new("Переключение языка пока недоступно.")
-                        .size(12.0)
-                        .color(p.muted),
-                );
-                ui.add_space(14.0);
-                if primary_button(ui, "Закрыть", p).clicked() {
-                    close = true;
-                }
-            });
+            dialog(
+                ctx,
+                &app.locale.settings_title,
+                Icon::Archive,
+                p.accent,
+                p,
+                |ui| {
+                    ui.set_min_width(420.0);
+                    ui.horizontal(|ui| {
+                        let _ = ui.selectable_label(true, &app.locale.settings_general);
+                        ui.add_enabled(false, egui::Button::new(&app.locale.settings_language));
+                    });
+                    ui.separator();
+                    ui.label(
+                        egui::RichText::new(&app.locale.settings_language)
+                            .strong()
+                            .color(p.text),
+                    );
+                    ui.add_enabled(false, egui::Button::new(&app.locale.settings_language_soon));
+                    ui.label(
+                        egui::RichText::new(format!("SOML: {}", app.locale.language))
+                            .size(11.0)
+                            .color(p.dim),
+                    );
+                    ui.add_space(6.0);
+                    ui.label(
+                        egui::RichText::new(&app.locale.settings_language_disabled)
+                            .size(12.0)
+                            .color(p.muted),
+                    );
+                    ui.add_space(14.0);
+                    if primary_button(ui, &app.locale.about_close, p).clicked() {
+                        close = true;
+                    }
+                },
+            );
             if close || escape {
                 app.modal = Modal::None;
             }
