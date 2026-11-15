@@ -3,6 +3,7 @@
 use eframe::egui::{self, vec2, Align, Align2, Color32, FontId, Layout, Sense, Stroke};
 
 use crate::app::{App, CreateDlg, ExtractDlg, Modal, ModalKind, PwDlg};
+use crate::config::Language;
 use crate::theme::Palette;
 use crate::views::{action_button, primary_button};
 use crate::widgets::{self, mix, Icon, Kind as Btn};
@@ -232,6 +233,7 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
         }
         ModalKind::Settings => {
             let mut close = false;
+            let mut selected_language = app.cfg.language;
             dialog(
                 ctx,
                 &app.locale.settings_title,
@@ -241,8 +243,8 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
                 |ui| {
                     ui.set_min_width(420.0);
                     ui.horizontal(|ui| {
-                        let _ = ui.selectable_label(true, &app.locale.settings_general);
-                        ui.add_enabled(false, egui::Button::new(&app.locale.settings_language));
+                        let _ = ui.selectable_label(false, &app.locale.settings_general);
+                        let _ = ui.selectable_label(true, &app.locale.settings_language);
                     });
                     ui.separator();
                     ui.label(
@@ -250,7 +252,18 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
                             .strong()
                             .color(p.text),
                     );
-                    ui.add_enabled(false, egui::Button::new(&app.locale.settings_language_soon));
+                    ui.horizontal(|ui| {
+                        ui.selectable_value(
+                            &mut selected_language,
+                            Language::Russian,
+                            &app.locale.language_russian,
+                        );
+                        ui.selectable_value(
+                            &mut selected_language,
+                            Language::English,
+                            &app.locale.language_english,
+                        );
+                    });
                     ui.label(
                         egui::RichText::new(format!("SOML: {}", app.locale.language))
                             .size(11.0)
@@ -268,6 +281,9 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
                     }
                 },
             );
+            if selected_language != app.cfg.language {
+                app.set_language(selected_language);
+            }
             if close || escape {
                 app.modal = Modal::None;
             }

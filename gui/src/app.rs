@@ -6,7 +6,7 @@ use std::sync::mpsc::Receiver;
 use std::time::Instant;
 use zeroize::Zeroizing;
 
-use crate::config::Config;
+use crate::config::{Config, Language};
 use crate::locale::Locale;
 use crate::progress::{self, Done, Msg, OpState};
 use crate::{dialogs, theme, views};
@@ -265,6 +265,16 @@ impl App {
             Modal::About => ModalKind::About,
             Modal::Settings => ModalKind::Settings,
         }
+    }
+
+    /// Меняет язык, сразу загружая соответствующий SOML-файл.
+    pub fn set_language(&mut self, language: Language) {
+        if self.cfg.language == language {
+            return;
+        }
+        self.cfg.language = language;
+        self.cfg.save();
+        self.locale = Locale::load(language);
     }
 
     pub fn begin_open(&mut self, path: PathBuf) {
