@@ -90,6 +90,20 @@ jobs:
           mkdir "$name"
           cp "$bin/pliczip$ext" "$bin/pliczip-gui$ext" README.md LICENSE "$name/"
           if [ "$RUNNER_OS" = "Windows" ]; then
+            # The GUI is the normal Windows entry point. Keep the old names
+            # for compatibility, but provide unambiguous names for users who
+            # simply open the first executable in the downloaded archive.
+            cp "$bin/pliczip-gui$ext" "$name/PlicZip$ext"
+            cp "$bin/pliczip$ext" "$name/pliczip-cli$ext"
+            printf '%s\n' \
+              'PlicZip Windows package' \
+              '' \
+              'Double-click PlicZip.exe to start the graphical application.' \
+              'pliczip-cli.exe is the command-line version and closes immediately when opened without arguments.' \
+              '' \
+              'To install Windows Explorer integration, run:' \
+              'PlicZip.exe --install-context-menu' \
+              > "$name/START-HERE.txt"
             asset="$name.zip"
             7z a -bd "$asset" "$name" >/dev/null
           else

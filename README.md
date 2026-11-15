@@ -23,6 +23,10 @@
 
 ## Быстрый старт / Quick start
 
+В Windows для запуска графического интерфейса откройте `PlicZip.exe`. Файл
+`pliczip-cli.exe` предназначен для командной строки; `pliczip.exe` сохранён
+для совместимости со старыми пакетами и также является CLI-файлом.
+
 ```text
 $ pliczip a backup.plz ./документы -x9
 $ pliczip a секрет.plz ./документы --password=пароль --volume-size 700M
@@ -37,4 +41,3 @@ $ pliczip x backup.plz -o ./восстановлено
 ---
 
 **Лицензия:** MIT OR Apache-2.0
-
