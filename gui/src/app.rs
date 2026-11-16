@@ -176,11 +176,17 @@ pub struct PwDlg {
     pub error: Option<String>,
 }
 
+pub struct RecoveryDlg {
+    pub path: PathBuf,
+    pub report: Option<Result<pliczip::recovery::VerifyReport, String>>,
+}
+
 pub enum Modal {
     None,
     Create(CreateDlg),
     Extract(ExtractDlg),
     Password(PwDlg),
+    Recovery(RecoveryDlg),
     Error {
         title: String,
         message: String,
@@ -196,6 +202,7 @@ pub enum ModalKind {
     Create,
     Extract,
     Password,
+    Recovery,
     Error,
     About,
     Settings,
@@ -261,6 +268,7 @@ impl App {
             Modal::Create(_) => ModalKind::Create,
             Modal::Extract(_) => ModalKind::Extract,
             Modal::Password(_) => ModalKind::Password,
+            Modal::Recovery(_) => ModalKind::Recovery,
             Modal::Error { .. } => ModalKind::Error,
             Modal::About => ModalKind::About,
             Modal::Settings => ModalKind::Settings,
@@ -537,6 +545,48 @@ impl App {
         });
     }
 
+    pub fn open_recovery_wizard(&mut self) {
+        let Some(loaded) = self.loaded.as_ref() else {
+            return;
+        };
+        if loaded.external_kind.is_some() || loaded.meta.recovery.is_none() {
+            return;
+        }
+        self.modal = Modal::Recovery(RecoveryDlg {
+            path: loaded.path.clone(),
+            report: None,
+        });
+        self.spawn_recovery_scan();
+    }
+
+    pub fn spawn_recovery_scan(&mut self) {
+        let Modal::Recovery(dlg) = &self.modal else {
+            return;
+        };
+        let path = dlg.path.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.rx = Some(rx);
+        self.op = Some(OpState::new("диагностика восстановления", 0));
+        std::thread::spawn(move || {
+            let result = pliczip::source::FileSource::open(&path)
+                .map_err(|err| format!("{err:#}"))
+                .and_then(|source| {
+                    pliczip::recovery::locate(&source)
+                        .map_err(|err| format!("{err:#}"))?
+                        .ok_or_else(|| "в архиве нет записи для восстановления".to_string())
+                })
+                .and_then(|trailer| {
+                    pliczip::source::FileSource::open(&path)
+                        .map_err(|err| format!("{err:#}"))
+                        .and_then(|source| {
+                            pliczip::recovery::verify(&source, &trailer, false, None)
+                                .map_err(|err| format!("{err:#}"))
+                        })
+                });
+            let _ = tx.send(Msg::Done(Box::new(Done::RecoveryScan { report: result })));
+        });
+    }
+
     /// Запускает фоновую проверку последнего GitHub Release.
     pub fn spawn_update_check(&mut self) {
         if self.op.is_some() || matches!(self.update, UpdateState::Checking) {
@@ -764,6 +814,11 @@ impl App {
                     };
                 }
             },
+            Done::RecoveryScan { report } => {
+                if let Modal::Recovery(dlg) = &mut self.modal {
+                    dlg.report = Some(report);
+                }
+            }
             Done::Create { path, stats } => match stats {
                 Ok(stats) => {
                     let text = format!(

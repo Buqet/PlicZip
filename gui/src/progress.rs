@@ -34,6 +34,10 @@ pub enum Done {
     Repair {
         report: Result<pliczip::recovery::RepairReport, String>,
     },
+    /// Диагностика recovery record перед восстановлением.
+    RecoveryScan {
+        report: Result<pliczip::recovery::VerifyReport, String>,
+    },
     /// Создание архива.
     Create {
         path: std::path::PathBuf,

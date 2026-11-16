@@ -13,13 +13,13 @@ use crate::theme::Palette;
 use crate::widgets::{self, mix, Icon, Kind as Btn};
 
 /// Кнопка-акцент (для диалогов).
-pub fn primary_button(ui: &mut egui::Ui, label: &str, _p: Palette) -> egui::Response {
-    widgets::button(ui, None, label, Btn::Primary, true)
+pub fn primary_button<L: AsRef<str>>(ui: &mut egui::Ui, label: L, _p: Palette) -> egui::Response {
+    widgets::button(ui, None, label.as_ref(), Btn::Primary, true)
 }
 
 /// Обычная кнопка (для диалогов).
-pub fn action_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
-    widgets::button(ui, None, label, Btn::Normal, true)
+pub fn action_button<L: AsRef<str>>(ui: &mut egui::Ui, label: L) -> egui::Response {
+    widgets::button(ui, None, label.as_ref(), Btn::Normal, true)
 }
 
 /// Меню приложения.
@@ -35,16 +35,16 @@ pub fn menu_bar(app: &mut App, ui: &mut egui::Ui) {
         )
         .show(ui, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
-                egui::menu::MenuButton::new("Файл").ui(ui, |ui| {
+                egui::menu::MenuButton::new(app.locale.text("file")).ui(ui, |ui| {
                     if ui
-                        .add_enabled(!busy, egui::Button::new("Открыть архив…    Ctrl+O"))
+                        .add_enabled(!busy, egui::Button::new(app.locale.text("open-archive")))
                         .clicked()
                     {
                         ui.close();
                         app.pick_and_open();
                     }
                     if ui
-                        .add_enabled(!busy, egui::Button::new("Создать архив…    Ctrl+N"))
+                        .add_enabled(!busy, egui::Button::new(app.locale.text("create-archive")))
                         .clicked()
                     {
                         ui.close();
@@ -53,7 +53,7 @@ pub fn menu_bar(app: &mut App, ui: &mut egui::Ui) {
                     if ui
                         .add_enabled(
                             !busy && app.loaded.is_some(),
-                            egui::Button::new("Закрыть архив"),
+                            egui::Button::new(app.locale.text("close-archive")),
                         )
                         .clicked()
                     {
@@ -62,22 +62,22 @@ pub fn menu_bar(app: &mut App, ui: &mut egui::Ui) {
                         app.last_action = None;
                     }
                     ui.separator();
-                    if ui.button("Выход").clicked() {
+                    if ui.button(app.locale.text("exit")).clicked() {
                         ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });
 
-                egui::menu::MenuButton::new("Архив").ui(ui, |ui| {
+                egui::menu::MenuButton::new(app.locale.text("archive")).ui(ui, |ui| {
                     let ready = !busy && app.loaded.is_some();
                     if ui
-                        .add_enabled(ready, egui::Button::new("Распаковать…    Ctrl+E"))
+                        .add_enabled(ready, egui::Button::new(app.locale.text("extract")))
                         .clicked()
                     {
                         ui.close();
                         app.open_extract_dialog();
                     }
                     if ui
-                        .add_enabled(ready, egui::Button::new("Проверить целостность    Ctrl+T"))
+                        .add_enabled(ready, egui::Button::new(app.locale.text("verify")))
                         .clicked()
                     {
                         ui.close();
@@ -90,15 +90,18 @@ pub fn menu_bar(app: &mut App, ui: &mut egui::Ui) {
                                     .loaded
                                     .as_ref()
                                     .is_some_and(|a| a.meta.recovery.is_some()),
-                            egui::Button::new("Восстановить recovery record"),
+                            egui::Button::new(app.locale.text("repair")),
                         )
                         .clicked()
                     {
                         ui.close();
-                        app.spawn_repair();
+                        app.open_recovery_wizard();
                     }
                     if ui
-                        .add_enabled(app.loaded.is_some(), egui::Button::new("Найти…    Ctrl+F"))
+                        .add_enabled(
+                            app.loaded.is_some(),
+                            egui::Button::new(app.locale.text("find")),
+                        )
                         .clicked()
                     {
                         ui.close();
@@ -107,17 +110,23 @@ pub fn menu_bar(app: &mut App, ui: &mut egui::Ui) {
                 });
 
                 egui::menu::MenuButton::new(&app.locale.menu_view).ui(ui, |ui| {
-                    egui::menu::MenuButton::new("Тема").ui(ui, |ui| {
-                        if ui.selectable_label(app.cfg.dark, "Тёмная").clicked() {
+                    egui::menu::MenuButton::new(app.locale.text("theme")).ui(ui, |ui| {
+                        if ui
+                            .selectable_label(app.cfg.dark, app.locale.text("dark"))
+                            .clicked()
+                        {
                             app.cfg.dark = true;
                             app.cfg.save();
                         }
-                        if ui.selectable_label(!app.cfg.dark, "Светлая").clicked() {
+                        if ui
+                            .selectable_label(!app.cfg.dark, app.locale.text("light"))
+                            .clicked()
+                        {
                             app.cfg.dark = false;
                             app.cfg.save();
                         }
                     });
-                    egui::menu::MenuButton::new("Акцент").ui(ui, |ui| {
+                    egui::menu::MenuButton::new(app.locale.text("accent")).ui(ui, |ui| {
                         for accent in Accent::ALL {
                             if ui
                                 .selectable_label(app.cfg.accent == accent, accent.name())
@@ -182,21 +191,32 @@ pub fn toolbar(app: &mut App, ui: &mut egui::Ui, busy: bool) {
         .frame(
             egui::Frame::new()
                 .fill(p.panel)
-                .inner_margin(egui::Margin::symmetric(14, 12))
-                .stroke(Stroke::new(1.0, p.line)),
+                .inner_margin(egui::Margin::symmetric(14, 12)),
         )
         .show(ui, |ui| {
             ui.horizontal_centered(|ui| {
                 let has = app.loaded.is_some();
-                if widgets::button(ui, Some(Icon::Plus), "Создать", Btn::Primary, !busy)
-                    .on_hover_text("Новый архив из файлов и папок · Ctrl+N")
-                    .clicked()
+                if widgets::button(
+                    ui,
+                    Some(Icon::Plus),
+                    &app.locale.text("create"),
+                    Btn::Primary,
+                    !busy,
+                )
+                .on_hover_text(app.locale.text("new-archive-hint"))
+                .clicked()
                 {
                     app.modal = Modal::Create(CreateDlg::from_sources(Vec::new()));
                 }
-                if widgets::button(ui, Some(Icon::Folder), "Открыть", Btn::Normal, !busy)
-                    .on_hover_text("Открыть архив .plz · Ctrl+O")
-                    .clicked()
+                if widgets::button(
+                    ui,
+                    Some(Icon::Folder),
+                    &app.locale.text("open"),
+                    Btn::Normal,
+                    !busy,
+                )
+                .on_hover_text(app.locale.text("open-archive-hint"))
+                .clicked()
                 {
                     app.pick_and_open();
                 }
@@ -211,7 +231,7 @@ pub fn toolbar(app: &mut App, ui: &mut egui::Ui, busy: bool) {
                 if widgets::button(
                     ui,
                     Some(Icon::Extract),
-                    "Распаковать",
+                    &app.locale.text("unpack"),
                     Btn::Normal,
                     has && !busy,
                 )
@@ -223,11 +243,11 @@ pub fn toolbar(app: &mut App, ui: &mut egui::Ui, busy: bool) {
                 if widgets::button(
                     ui,
                     Some(Icon::Shield),
-                    "Проверить",
+                    &app.locale.text("verify-short"),
                     Btn::Normal,
                     has && !busy,
                 )
-                .on_hover_text("Сверить BLAKE3 всех файлов и блоков · Ctrl+T")
+                .on_hover_text(app.locale.text("verify-hint"))
                 .clicked()
                 {
                     app.spawn_test();
@@ -236,9 +256,9 @@ pub fn toolbar(app: &mut App, ui: &mut egui::Ui, busy: bool) {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     let theme_icon = if app.cfg.dark { Icon::Sun } else { Icon::Moon };
                     let hint = if app.cfg.dark {
-                        "Светлая тема"
+                        app.locale.text("light")
                     } else {
-                        "Тёмная тема"
+                        app.locale.text("dark")
                     };
                     if widgets::button(ui, Some(theme_icon), "", Btn::Ghost, true)
                         .on_hover_text(hint)
@@ -308,7 +328,7 @@ fn search_box(app: &mut App, ui: &mut egui::Ui, p: Palette) {
                         egui::TextEdit::singleline(&mut loaded.filter)
                             .id_salt("archive_search")
                             .frame(egui::Frame::NONE)
-                            .hint_text("Поиск по архиву   Ctrl+F")
+                            .hint_text(app.locale.text("search-hint"))
                             .align(egui::Align2::LEFT_CENTER)
                             .desired_width(width),
                     );
@@ -832,7 +852,6 @@ pub fn central(app: &mut App, ui: &mut egui::Ui, p: Palette, busy: bool) {
             egui::Frame::new()
                 .fill(p.panel)
                 .corner_radius(12u8)
-                .stroke(Stroke::new(1.0, p.line))
                 .show(ui, |ui| {
                     ui.set_min_size(ui.available_size());
                     table(app, ui, p);
@@ -851,10 +870,6 @@ fn table(app: &mut App, ui: &mut egui::Ui, p: Palette) {
     let (name_rect, cols) = column_rects(head);
     let header_font = FontId::proportional(11.0);
     let painter = ui.painter().clone();
-    painter.line_segment(
-        [head.left_bottom(), head.right_bottom()],
-        Stroke::new(1.0, p.line),
-    );
     let mut header_cell = |rect: Rect, key: Sort, title: &str, left: bool| {
         let resp = ui
             .interact(rect, ui.scope_id().with(("sort", title)), Sense::click())
@@ -1290,8 +1305,7 @@ pub fn status_bar(app: &mut App, ui: &mut egui::Ui) {
         .frame(
             egui::Frame::new()
                 .fill(p.panel)
-                .inner_margin(egui::Margin::symmetric(14, 4))
-                .stroke(Stroke::new(1.0, p.line)),
+                .inner_margin(egui::Margin::symmetric(14, 4)),
         )
         .show(ui, |ui| {
             ui.horizontal_centered(|ui| {

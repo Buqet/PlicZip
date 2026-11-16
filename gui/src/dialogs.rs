@@ -4,6 +4,7 @@ use eframe::egui::{self, vec2, Align, Align2, Color32, FontId, Layout, Sense, St
 
 use crate::app::{App, CreateDlg, ExtractDlg, Modal, ModalKind, PwDlg};
 use crate::config::Language;
+use crate::locale::Locale;
 use crate::theme::Palette;
 use crate::views::{action_button, primary_button};
 use crate::widgets::{self, mix, Icon, Kind as Btn};
@@ -61,13 +62,13 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
             let mut request = CreateRequest::None;
             dialog(
                 ctx,
-                "Создать архив",
+                app.locale.text("dialog-create"),
                 Icon::Plus,
                 p.accent,
                 p,
                 |ui| {
                     if let Modal::Create(dlg) = &mut app.modal {
-                        request = create_dialog(ui, dlg, p);
+                        request = create_dialog(ui, dlg, p, &app.locale);
                     }
                 },
             );
@@ -97,13 +98,13 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
             let mut cancel = false;
             dialog(
                 ctx,
-                "Распаковать архив",
+                app.locale.text("dialog-extract"),
                 Icon::Extract,
                 p.accent,
                 p,
                 |ui| {
                     if let Modal::Extract(dlg) = &mut app.modal {
-                        extract_dialog(ui, dlg, p, &mut submit, &mut cancel);
+                        extract_dialog(ui, dlg, p, &app.locale, &mut submit, &mut cancel);
                     }
                 },
             );
@@ -129,13 +130,13 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
             let mut cancel = false;
             dialog(
                 ctx,
-                "Пароль архива",
+                app.locale.text("dialog-password"),
                 Icon::Lock,
                 p.accent,
                 p,
                 |ui| {
                     if let Modal::Password(dlg) = &mut app.modal {
-                        password_dialog(ui, dlg, p, &mut submit, &mut cancel);
+                        password_dialog(ui, dlg, p, &app.locale, &mut submit, &mut cancel);
                     }
                 },
             );
@@ -153,6 +154,88 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
                 }
             }
             if cancel || escape {
+                app.modal = Modal::None;
+            }
+        }
+        ModalKind::Recovery => {
+            let mut close = false;
+            let mut repair = false;
+            dialog(
+                ctx,
+                "Мастер восстановления",
+                Icon::Shield,
+                p.accent,
+                p,
+                |ui| {
+                    ui.set_min_width(470.0);
+                    ui.label(
+                        egui::RichText::new("Шаг 1 из 2 · диагностика")
+                            .strong()
+                            .color(p.text),
+                    );
+                    ui.label(egui::RichText::new("Пароль не требуется: recovery record работает с зашифрованными байтами.").color(p.muted));
+                    ui.add_space(10.0);
+                    let report = match &app.modal {
+                        Modal::Recovery(dlg) => dlg.report.as_ref(),
+                        _ => None,
+                    };
+                    match report {
+                        None => {
+                            ui.spinner();
+                            ui.label("Проверяем повреждённые куски и доступность parity…");
+                        }
+                        Some(Err(err)) => {
+                            ui.colored_label(p.err, format!("Диагностика не удалась: {err}"));
+                        }
+                        Some(Ok(report)) => {
+                            let status = if report.is_clean() {
+                                "Повреждений не обнаружено. Восстановление не требуется."
+                            } else if report.recoverable() {
+                                "Повреждения обнаружены, но их можно восстановить."
+                            } else {
+                                "Повреждения обнаружены, но parity недостаточно."
+                            };
+                            ui.colored_label(
+                                if report.is_clean() { p.ok } else { p.accent },
+                                status,
+                            );
+                            ui.label(format!(
+                                "Data-кусков: {} · Parity-кусков: {}",
+                                report.data_shards, report.parity_shards
+                            ));
+                            ui.label(format!(
+                                "Повреждено data: {} · parity: {}",
+                                report.bad_data.len(),
+                                report.bad_parity.len()
+                            ));
+                            if !report.unrecoverable_groups.is_empty() {
+                                ui.colored_label(
+                                    p.err,
+                                    "Группы с невосстановимым повреждением: недостаточно parity.",
+                                );
+                            }
+                            ui.add_space(8.0);
+                            if report.recoverable() && !report.is_clean() {
+                                ui.label(
+                                    egui::RichText::new("Шаг 2 из 2 · восстановление")
+                                        .strong()
+                                        .color(p.text),
+                                );
+                                ui.label("После восстановления архив будет автоматически проверен повторно.");
+                                repair = primary_button(ui, "Восстановить", p).clicked();
+                            }
+                        }
+                    }
+                    ui.add_space(12.0);
+                    if action_button(ui, "Закрыть").clicked() {
+                        close = true;
+                    }
+                },
+            );
+            if repair {
+                app.modal = Modal::None;
+                app.spawn_repair();
+            } else if close || escape {
                 app.modal = Modal::None;
             }
         }
@@ -174,7 +257,7 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
                     ui.label(egui::RichText::new(&hint).color(p.muted));
                 }
                 ui.add_space(12.0);
-                if primary_button(ui, "Закрыть", p).clicked() {
+                if primary_button(ui, app.locale.text("close"), p).clicked() {
                     close = true;
                 }
             });
@@ -301,7 +384,12 @@ enum CreateRequest {
 }
 
 /// Диалог создания архива.
-fn create_dialog(ui: &mut egui::Ui, dlg: &mut CreateDlg, p: Palette) -> CreateRequest {
+fn create_dialog(
+    ui: &mut egui::Ui,
+    dlg: &mut CreateDlg,
+    p: Palette,
+    locale: &Locale,
+) -> CreateRequest {
     let mut request = CreateRequest::None;
 
     // Перетаскивание файлов в диалог.
@@ -332,12 +420,12 @@ fn create_dialog(ui: &mut egui::Ui, dlg: &mut CreateDlg, p: Palette) -> CreateRe
                     widgets::icon(ui, Icon::Folder, 28.0, p.accent);
                     ui.add_space(4.0);
                     ui.label(
-                        egui::RichText::new("Перетащите файлы или папки сюда")
+                        egui::RichText::new(locale.text("drop-files"))
                             .strong()
                             .color(p.text),
                     );
                     ui.label(
-                        egui::RichText::new("или выберите их на диске кнопкой ниже")
+                        egui::RichText::new(locale.text("choose-files-hint"))
                             .size(12.0)
                             .color(p.muted),
                     );
@@ -361,7 +449,7 @@ fn create_dialog(ui: &mut egui::Ui, dlg: &mut CreateDlg, p: Palette) -> CreateRe
                                     egui::RichText::new(path.display().to_string()).color(p.text),
                                 );
                                 if widgets::button(ui, Some(Icon::Close), "", Btn::Ghost, true)
-                                    .on_hover_text("Убрать из списка")
+                                    .on_hover_text(locale.text("remove-from-list"))
                                     .clicked()
                                 {
                                     dlg.sources.remove(i);
@@ -382,7 +470,14 @@ fn create_dialog(ui: &mut egui::Ui, dlg: &mut CreateDlg, p: Palette) -> CreateRe
     );
 
     ui.add_space(10.0);
-    if widgets::button(ui, Some(Icon::Plus), "Выбрать на диске…", Btn::Normal, true).clicked()
+    if widgets::button(
+        ui,
+        Some(Icon::Plus),
+        &locale.text("choose-disk"),
+        Btn::Normal,
+        true,
+    )
+    .clicked()
     {
         if let Some(picked) = rfd::FileDialog::new().pick_files() {
             for path in picked {
@@ -394,13 +489,13 @@ fn create_dialog(ui: &mut egui::Ui, dlg: &mut CreateDlg, p: Palette) -> CreateRe
     }
 
     ui.add_space(10.0);
-    ui.label(egui::RichText::new("Сохранить как").color(p.muted));
+    ui.label(egui::RichText::new(locale.text("save-as")).color(p.muted));
     ui.horizontal(|ui| {
         ui.text_edit_singleline(&mut dlg.output);
-        if action_button(ui, "Обзор…").clicked() {
+        if action_button(ui, locale.text("browse")).clicked() {
             if let Some(picked) = rfd::FileDialog::new()
                 .set_file_name("архив.plz")
-                .set_title("Сохранить архив")
+                .set_title(locale.text("save-archive"))
                 .save_file()
             {
                 dlg.output = picked.to_string_lossy().into_owned();
@@ -420,7 +515,7 @@ fn create_dialog(ui: &mut egui::Ui, dlg: &mut CreateDlg, p: Palette) -> CreateRe
         _ => format!("brotli q{} · максимум", dlg.level),
     };
     ui.horizontal(|ui| {
-        ui.label(egui::RichText::new("Сжатие").color(p.muted));
+        ui.label(egui::RichText::new(locale.text("compression")).color(p.muted));
         ui.add(egui::Slider::new(&mut dlg.level, 0..=11).show_value(false));
         ui.label(egui::RichText::new(&label).color(p.accent).monospace());
     });
@@ -444,13 +539,13 @@ fn create_dialog(ui: &mut egui::Ui, dlg: &mut CreateDlg, p: Palette) -> CreateRe
     );
 
     ui.add_space(8.0);
-    ui.checkbox(&mut dlg.solid, "Склеивать мелкие файлы в solid-блоки");
+    ui.checkbox(&mut dlg.solid, locale.text("solid"));
 
     ui.add_space(8.0);
-    ui.checkbox(&mut dlg.encrypt, "Защитить паролем");
+    ui.checkbox(&mut dlg.encrypt, locale.text("encrypt"));
     if dlg.encrypt {
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("Пароль").color(p.muted));
+            ui.label(egui::RichText::new(locale.text("password")).color(p.muted));
             ui.add(
                 egui::TextEdit::singleline(&mut dlg.password)
                     .password(true)
@@ -458,7 +553,7 @@ fn create_dialog(ui: &mut egui::Ui, dlg: &mut CreateDlg, p: Palette) -> CreateRe
             );
         });
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("Повторите").color(p.muted));
+            ui.label(egui::RichText::new(locale.text("password-repeat")).color(p.muted));
             ui.add(
                 egui::TextEdit::singleline(&mut dlg.password2)
                     .password(true)
@@ -469,7 +564,7 @@ fn create_dialog(ui: &mut egui::Ui, dlg: &mut CreateDlg, p: Palette) -> CreateRe
 
     ui.add_space(8.0);
     ui.horizontal(|ui| {
-        ui.label(egui::RichText::new("Том").color(p.muted));
+        ui.label(egui::RichText::new(locale.text("volume")).color(p.muted));
         ui.add(
             egui::TextEdit::singleline(&mut dlg.volume)
                 .hint_text("например 700M")
@@ -483,7 +578,7 @@ fn create_dialog(ui: &mut egui::Ui, dlg: &mut CreateDlg, p: Palette) -> CreateRe
     });
 
     ui.add_space(8.0);
-    ui.label(egui::RichText::new("Комментарий").color(p.muted));
+    ui.label(egui::RichText::new(locale.text("comment")).color(p.muted));
     ui.add(egui::TextEdit::singleline(&mut dlg.comment).desired_width(f32::INFINITY));
 
     if let Some(err) = &dlg.error {
@@ -497,7 +592,7 @@ fn create_dialog(ui: &mut egui::Ui, dlg: &mut CreateDlg, p: Palette) -> CreateRe
             request = CreateRequest::Cancel;
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if primary_button(ui, "Создать", p).clicked() {
+            if primary_button(ui, locale.text("create-button"), p).clicked() {
                 request = CreateRequest::Create;
             }
         });
@@ -511,16 +606,17 @@ fn extract_dialog(
     ui: &mut egui::Ui,
     dlg: &mut ExtractDlg,
     p: Palette,
+    locale: &Locale,
     submit: &mut bool,
     cancel: &mut bool,
 ) {
     ui.set_min_width(420.0);
-    ui.label(egui::RichText::new("Куда распаковать").color(p.muted));
+    ui.label(egui::RichText::new(locale.text("extract-to")).color(p.muted));
     ui.horizontal(|ui| {
         ui.text_edit_singleline(&mut dlg.output);
-        if action_button(ui, "Обзор…").clicked() {
+        if action_button(ui, locale.text("browse")).clicked() {
             if let Some(picked) = rfd::FileDialog::new()
-                .set_title("Каталог для распаковки")
+                .set_title(locale.text("extract-folder"))
                 .pick_folder()
             {
                 dlg.output = picked.to_string_lossy().into_owned();
@@ -537,7 +633,7 @@ fn extract_dialog(
             *cancel = true;
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if primary_button(ui, "Распаковать", p).clicked() {
+            if primary_button(ui, locale.text("extract-button"), p).clicked() {
                 *submit = true;
             }
         });
@@ -549,6 +645,7 @@ fn password_dialog(
     ui: &mut egui::Ui,
     dlg: &mut PwDlg,
     p: Palette,
+    locale: &Locale,
     submit: &mut bool,
     cancel: &mut bool,
 ) {
@@ -558,7 +655,7 @@ fn password_dialog(
     ui.add(
         egui::TextEdit::singleline(&mut dlg.password)
             .password(true)
-            .hint_text("Пароль")
+            .hint_text(locale.text("password"))
             .desired_width(340.0),
     );
     if let Some(err) = &dlg.error {
@@ -571,7 +668,7 @@ fn password_dialog(
             *cancel = true;
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if primary_button(ui, "Открыть", p).clicked() {
+            if primary_button(ui, locale.text("open-button"), p).clicked() {
                 *submit = true;
             }
         });

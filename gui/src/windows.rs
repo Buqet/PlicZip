@@ -10,6 +10,9 @@ use std::path::Path;
 const ROOT: &str = r"HKCU\Software\Classes";
 
 #[cfg(windows)]
+const SUPPORTED_EXTENSIONS: [&str; 4] = [".plz", ".zip", ".7z", ".rar"];
+
+#[cfg(windows)]
 fn reg_add(key: &str, value: &str) -> Result<(), String> {
     let status = std::process::Command::new("reg")
         .args(["add", key, "/ve", "/t", "REG_SZ", "/d", value, "/f"])
@@ -62,27 +65,36 @@ pub fn install() -> Result<(), String> {
         .map_err(|err| format!("не удалось определить путь PlicZip: {err}"))?;
     let open_command = command(&exe, "--context-open \"%1\"");
     let add_command = command(&exe, "--context-add \"%1\"");
-    let open_key = format!(r#"{ROOT}\SystemFileAssociations\.plz\shell\PlicZip"#);
     let add_key = format!(r#"{ROOT}\*\shell\PlicZipAdd"#);
     let dir_key = format!(r#"{ROOT}\Directory\shell\PlicZipAdd"#);
 
-    reg_add(&format!(r#"{open_key}\command"#), &open_command)?;
+    for extension in SUPPORTED_EXTENSIONS {
+        let open_key = format!(r#"{ROOT}\SystemFileAssociations\{extension}\shell\PlicZip"#);
+        reg_add(&format!(r#"{open_key}\command"#), &open_command)?;
+        reg_add_named(&open_key, "MUIVerb", "Открыть в PlicZip")?;
+        reg_add_named(&open_key, "Icon", &exe.to_string_lossy())?;
+    }
     reg_add(&format!(r#"{add_key}\command"#), &add_command)?;
     reg_add(&format!(r#"{dir_key}\command"#), &add_command)?;
-    reg_add_named(&open_key, "MUIVerb", "Открыть в PlicZip")?;
     reg_add_named(&add_key, "MUIVerb", "Добавить в архив PlicZip")?;
     reg_add_named(&dir_key, "MUIVerb", "Добавить в архив PlicZip")?;
+    reg_add_named(&add_key, "Icon", &exe.to_string_lossy())?;
+    reg_add_named(&dir_key, "Icon", &exe.to_string_lossy())?;
     Ok(())
 }
 
 /// Удалить команды PlicZip из контекстного меню текущего пользователя.
 #[cfg(windows)]
 pub fn uninstall() -> Result<(), String> {
-    for key in [
-        format!(r#"{ROOT}\SystemFileAssociations\.plz\shell\PlicZip"#),
+    let mut keys: Vec<String> = SUPPORTED_EXTENSIONS
+        .iter()
+        .map(|extension| format!(r#"{ROOT}\SystemFileAssociations\{extension}\shell\PlicZip"#))
+        .collect();
+    keys.extend([
         format!(r#"{ROOT}\*\shell\PlicZipAdd"#),
         format!(r#"{ROOT}\Directory\shell\PlicZipAdd"#),
-    ] {
+    ]);
+    for key in keys {
         reg_delete(&key)?;
     }
     Ok(())

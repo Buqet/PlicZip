@@ -2,6 +2,7 @@
 
 use crate::config::Language;
 use serde::Deserialize;
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -23,6 +24,8 @@ pub struct Locale {
     pub settings_language_disabled: String,
     pub about_changes: String,
     pub about_close: String,
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, String>,
 }
 
 impl Locale {
@@ -32,6 +35,13 @@ impl Locale {
             Language::English => include_str!("../locales/en.soml"),
         };
         soml::from_str(source).expect("embedded SOML locale must be valid")
+    }
+
+    pub fn text(&self, key: &str) -> String {
+        self.extra
+            .get(key)
+            .cloned()
+            .unwrap_or_else(|| key.to_owned())
     }
 }
 
