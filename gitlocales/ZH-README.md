@@ -327,3 +327,7 @@ ar.extract(&ExtractOptions { output: dir, ..Default::default() })?;
 ```
 
 许可：MIT OR Apache-2.0。
+
+## v1.26.100
+
+新增：界面强调色选择、文件右键菜单（重命名、删除、选择）、空白区域操作（创建文件、排序）以及只读 TAR 支持。归档创建仍然只使用 `.plz`；ZIP、7z、RAR 和 TAR 支持读取、校验与解压。

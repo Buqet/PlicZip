@@ -973,6 +973,8 @@ fn table(app: &mut App, ui: &mut egui::Ui, p: Palette) {
     let rows = loaded.view.len();
     let mut clicked: Option<usize> = None;
     let mut toggle_dir: Option<String> = None;
+    let mut context_action: Option<(usize, u8)> = None;
+    let locale = app.locale.clone();
 
     if rows == 0 {
         ui.add_space(40.0);
@@ -1155,6 +1157,34 @@ fn table(app: &mut App, ui: &mut egui::Ui, p: Palette) {
                 } else {
                     resp
                 };
+                if interactive {
+                    resp.context_menu(|ui| {
+                        if ui
+                            .add_enabled(
+                                loaded.external_kind.is_none(),
+                                egui::Button::new(locale.text("context-rename")),
+                            )
+                            .clicked()
+                        {
+                            context_action = Some((i, 1));
+                            ui.close();
+                        }
+                        if ui
+                            .add_enabled(
+                                loaded.external_kind.is_none(),
+                                egui::Button::new(locale.text("context-delete")),
+                            )
+                            .clicked()
+                        {
+                            context_action = Some((i, 2));
+                            ui.close();
+                        }
+                        if ui.button(locale.text("context-select")).clicked() {
+                            context_action = Some((i, 3));
+                            ui.close();
+                        }
+                    });
+                }
                 if resp.clicked() {
                     clicked = Some(i);
                 }
@@ -1170,6 +1200,58 @@ fn table(app: &mut App, ui: &mut egui::Ui, p: Palette) {
     }
     if let Some(path) = toggle_dir {
         loaded.toggle_dir(&path);
+    }
+    // Контекстное меню пустого места: создание файла и сортировка.
+    let blank = ui.allocate_response(vec2(ui.available_width().max(1.0), 28.0), Sense::click());
+    let mut blank_action = 0u8;
+    blank.context_menu(|ui| {
+        if ui.button(locale.text("context-new-file")).clicked() {
+            blank_action = 1;
+            ui.close();
+        }
+        ui.menu_button(locale.text("context-sort"), |ui| {
+            if ui.button(locale.text("context-sort-name")).clicked() {
+                blank_action = 10;
+                ui.close();
+            }
+            if ui.button(locale.text("context-sort-size")).clicked() {
+                blank_action = 11;
+                ui.close();
+            }
+            if ui.button(locale.text("context-sort-date")).clicked() {
+                blank_action = 12;
+                ui.close();
+            }
+        });
+    });
+    if blank_action == 1 {
+        app.modal = Modal::NewFile {
+            value: locale.text("name-placeholder"),
+        };
+    } else if blank_action >= 10 {
+        app.sort = match blank_action {
+            11 => Sort::Size,
+            12 => Sort::Date,
+            _ => Sort::Path,
+        };
+        app.sort_desc = false;
+    }
+    if let Some((i, action)) = context_action {
+        match action {
+            1 => {
+                let value = loaded
+                    .meta
+                    .index
+                    .entries
+                    .get(i)
+                    .map(|e| e.path.clone())
+                    .unwrap_or_default();
+                app.modal = Modal::Rename { index: i, value };
+            }
+            2 => app.spawn_rebuild_entry(Some(i), None, None),
+            3 => loaded.selected = Some(i),
+            _ => {}
+        }
     }
 }
 

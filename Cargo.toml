@@ -5,7 +5,7 @@ resolver = "2"
 
 [package]
 name = "pliczip"
-version = "0.10.121"
+version = "1.26.100"
 edition = "2021"
 rust-version = "1.89"
 description = "PlicZip — архиватор с собственным форматом .plz"
@@ -40,6 +40,7 @@ ureq = { version = "2.12", default-features = false, features = ["json", "tls"] 
 sevenz-rust = { version = "0.6.1", default-features = false, features = ["compress", "aes256", "bzip2", "zstd"] }
 rars = { version = "0.12.4", default-features = false, features = ["encryption"] }
 zip = { version = "9.5", default-features = false, features = ["aes-crypto", "deflate-flate2-zlib-rs", "time"] }
+tar = { version = "0.4", default-features = false }
 
 [profile.release]
 lto = true

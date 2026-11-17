@@ -3,7 +3,7 @@
 use eframe::egui::{self, vec2, Align, Align2, Color32, FontId, Layout, Sense, Stroke};
 
 use crate::app::{App, CreateDlg, ExtractDlg, Modal, ModalKind, PwDlg};
-use crate::config::Language;
+use crate::config::{Accent, Language};
 use crate::locale::Locale;
 use crate::theme::Palette;
 use crate::views::{action_button, primary_button};
@@ -154,6 +154,80 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
                 }
             }
             if cancel || escape {
+                app.modal = Modal::None;
+            }
+        }
+        ModalKind::Rename => {
+            let mut submit = false;
+            let mut cancel = false;
+            dialog(
+                ctx,
+                app.locale.text("rename-title"),
+                Icon::File,
+                p.accent,
+                p,
+                |ui| {
+                    if let Modal::Rename { value, .. } = &mut app.modal {
+                        ui.add(
+                            egui::TextEdit::singleline(value)
+                                .hint_text(app.locale.text("name-placeholder")),
+                        );
+                        ui.horizontal(|ui| {
+                            submit =
+                                primary_button(ui, app.locale.text("apply-action"), p).clicked();
+                            cancel = action_button(ui, app.locale.text("cancel-action")).clicked();
+                        });
+                    }
+                },
+            );
+            if escape {
+                cancel = true;
+            }
+            if submit {
+                if let Modal::Rename { index, value } =
+                    std::mem::replace(&mut app.modal, Modal::None)
+                {
+                    if !value.trim().is_empty() {
+                        app.spawn_rebuild_entry(Some(index), Some(value.trim().to_owned()), None);
+                    }
+                }
+            } else if cancel {
+                app.modal = Modal::None;
+            }
+        }
+        ModalKind::NewFile => {
+            let mut submit = false;
+            let mut cancel = false;
+            dialog(
+                ctx,
+                app.locale.text("new-file-title"),
+                Icon::File,
+                p.accent,
+                p,
+                |ui| {
+                    if let Modal::NewFile { value } = &mut app.modal {
+                        ui.add(
+                            egui::TextEdit::singleline(value)
+                                .hint_text(app.locale.text("name-placeholder")),
+                        );
+                        ui.horizontal(|ui| {
+                            submit =
+                                primary_button(ui, app.locale.text("apply-action"), p).clicked();
+                            cancel = action_button(ui, app.locale.text("cancel-action")).clicked();
+                        });
+                    }
+                },
+            );
+            if escape {
+                cancel = true;
+            }
+            if submit {
+                if let Modal::NewFile { value } = std::mem::replace(&mut app.modal, Modal::None) {
+                    if !value.trim().is_empty() {
+                        app.spawn_rebuild_entry(None, None, Some(value.trim().to_owned()));
+                    }
+                }
+            } else if cancel {
                 app.modal = Modal::None;
             }
         }
@@ -315,6 +389,7 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
         ModalKind::Settings => {
             let mut close = false;
             let mut selected_language = app.cfg.language;
+            let mut selected_accent = app.cfg.accent;
             dialog(
                 ctx,
                 &app.locale.settings_title,
@@ -369,6 +444,34 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
                             .size(11.0)
                             .color(p.dim),
                     );
+                    ui.add_space(10.0);
+                    ui.label(
+                        egui::RichText::new(app.locale.text("accent"))
+                            .strong()
+                            .color(p.text),
+                    );
+                    egui::Frame::new()
+                        .fill(p.panel)
+                        .corner_radius(8.0)
+                        .inner_margin(egui::Margin::same(4))
+                        .show(ui, |ui| {
+                            for accent in Accent::ALL {
+                                let key = match accent {
+                                    Accent::Brass => "accent-brass",
+                                    Accent::Steel => "accent-steel",
+                                    Accent::Green => "accent-green",
+                                };
+                                if ui
+                                    .selectable_label(
+                                        selected_accent == accent,
+                                        app.locale.text(key),
+                                    )
+                                    .clicked()
+                                {
+                                    selected_accent = accent;
+                                }
+                            }
+                        });
                     ui.add_space(14.0);
                     if primary_button(ui, &app.locale.about_close, p).clicked() {
                         close = true;
@@ -378,6 +481,11 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
             if selected_language != app.cfg.language {
                 app.set_language(selected_language);
             }
+            if selected_accent != app.cfg.accent {
+                app.cfg.accent = selected_accent;
+                app.cfg.save();
+                crate::theme::apply(ctx, &app.cfg);
+            }
             if close || escape {
                 app.modal = Modal::None;
             }
@@ -385,7 +493,7 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
     }
 }
 
-const CHANGELOG_RU: &str = "• ZIP: чтение, просмотр, проверка и распаковка\n• 7z и RAR: режим только чтение\n• Безопасная обработка путей внешних архивов\n• Создание архивов только в формате .plz\n• Binary keyfile без преобразования в hex\n• Recovery records и команда repair\n• Windows Explorer: открытие через контекстное меню";
+const CHANGELOG_RU: &str = "• TAR: чтение, просмотр, проверка и распаковка\n• Контекстное меню файлов: переименование, удаление и выбор\n• Создание пустых файлов через ПКМ по свободному месту\n• Настройка акцента интерфейса\n• ZIP, 7z и RAR: режим чтения\n• Создание архивов только в формате .plz\n• Recovery records и Windows Explorer";
 
 /// Что диалог создания просит сделать дальше.
 enum CreateRequest {

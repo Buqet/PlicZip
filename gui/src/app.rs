@@ -224,6 +224,13 @@ pub enum Modal {
     Create(CreateDlg),
     Extract(ExtractDlg),
     Password(PwDlg),
+    Rename {
+        index: usize,
+        value: String,
+    },
+    NewFile {
+        value: String,
+    },
     Recovery(RecoveryDlg),
     Error {
         title: String,
@@ -240,6 +247,8 @@ pub enum ModalKind {
     Create,
     Extract,
     Password,
+    Rename,
+    NewFile,
     Recovery,
     Error,
     About,
@@ -306,6 +315,8 @@ impl App {
             Modal::Create(_) => ModalKind::Create,
             Modal::Extract(_) => ModalKind::Extract,
             Modal::Password(_) => ModalKind::Password,
+            Modal::Rename { .. } => ModalKind::Rename,
+            Modal::NewFile { .. } => ModalKind::NewFile,
             Modal::Recovery(_) => ModalKind::Recovery,
             Modal::Error { .. } => ModalKind::Error,
             Modal::About => ModalKind::About,
@@ -617,6 +628,94 @@ impl App {
         });
     }
 
+    pub fn spawn_rebuild_entry(
+        &mut self,
+        index: Option<usize>,
+        rename_to: Option<String>,
+        new_file: Option<String>,
+    ) {
+        let Some(loaded) = self.loaded.as_ref() else {
+            return;
+        };
+        if loaded.external_kind.is_some() {
+            return;
+        }
+        let archive = loaded.path.clone();
+        let password = loaded.password.clone();
+        let old_path = index
+            .and_then(|i| loaded.meta.index.entries.get(i))
+            .map(|e| e.path.clone());
+        let (sink, tx, rx) = progress::channel_with_sink();
+        self.rx = Some(rx);
+        self.op = Some(OpState::new(self.locale.text("operation-add"), 0));
+        std::thread::spawn(move || {
+            let result = (|| -> anyhow::Result<CreateStats> {
+                let stamp = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)?
+                    .as_nanos();
+                let temp = std::env::temp_dir().join(format!("pliczip-edit-{stamp}"));
+                std::fs::create_dir_all(&temp)?;
+                let result = (|| -> anyhow::Result<CreateStats> {
+                    let mut ar =
+                        Archive::open_with(&archive, password.as_deref().map(String::as_str))?;
+                    ar.extract(&ExtractOptions {
+                        output: temp.clone(),
+                        show_progress: false,
+                        ..Default::default()
+                    })?;
+                    if let Some(old) = old_path.as_deref() {
+                        let source = pliczip::safety::join_safe(&temp, old)?;
+                        if let Some(new_name) = rename_to.as_deref() {
+                            let target = pliczip::safety::join_safe(&temp, new_name)?;
+                            if let Some(parent) = target.parent() {
+                                std::fs::create_dir_all(parent)?;
+                            }
+                            std::fs::rename(source, target)?;
+                        } else if source.is_dir() {
+                            std::fs::remove_dir_all(source)?;
+                        } else {
+                            std::fs::remove_file(source)?;
+                        }
+                    }
+                    if let Some(name) = new_file.as_deref() {
+                        let target = pliczip::safety::join_safe(&temp, name)?;
+                        if let Some(parent) = target.parent() {
+                            std::fs::create_dir_all(parent)?;
+                        }
+                        std::fs::File::create(target)?;
+                    }
+                    let inputs: Vec<PathBuf> = std::fs::read_dir(&temp)?
+                        .filter_map(Result::ok)
+                        .map(|e| e.path())
+                        .collect();
+                    let replacement = temp.with_extension("plz.tmp");
+                    let opts = CreateOptions {
+                        password,
+                        show_progress: false,
+                        progress: Some(std::sync::Arc::new(sink)),
+                        ..Default::default()
+                    };
+                    let stats = pliczip::writer::create(&replacement, &inputs, &opts)?;
+                    let backup = archive.with_extension("plz.bak");
+                    let _ = std::fs::remove_file(&backup);
+                    std::fs::rename(&archive, &backup)?;
+                    if let Err(err) = std::fs::rename(&replacement, &archive) {
+                        let _ = std::fs::rename(&backup, &archive);
+                        return Err(err.into());
+                    }
+                    let _ = std::fs::remove_file(backup);
+                    Ok(stats)
+                })();
+                let _ = std::fs::remove_dir_all(&temp);
+                result
+            })();
+            let _ = tx.send(Msg::Done(Box::new(Done::Create {
+                path: archive,
+                stats: result.map_err(|e| format!("{e:#}")),
+            })));
+        });
+    }
+
     pub fn spawn_test(&mut self) {
         let Some(loaded) = self.loaded.as_ref() else {
             return;
@@ -841,7 +940,7 @@ impl App {
         let picked = rfd::FileDialog::new()
             .add_filter(
                 self.locale.text("archive-filter"),
-                &["plz", "zip", "7z", "rar"],
+                &["plz", "zip", "7z", "rar", "tar"],
             )
             .set_title(self.locale.text("open-dialog-title"))
             .pick_file();

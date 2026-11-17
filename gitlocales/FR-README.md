@@ -340,3 +340,7 @@ ar.extract(&ExtractOptions { output: dir, ..Default::default() })?;
 ```
 
 Licence : MIT OR Apache-2.0.
+
+## v1.26.100
+
+Nouveautés : choix de l’accent, menu contextuel des fichiers (renommer, supprimer, sélectionner), actions sur l’espace vide (créer un fichier, trier) et lecture des TAR. La création reste limitée au format `.plz` ; ZIP, 7z, RAR et TAR peuvent être lus, vérifiés et extraits.

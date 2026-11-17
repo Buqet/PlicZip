@@ -386,3 +386,7 @@ pliczip repair backup.plz
 `repair` changes an archive only after validating the recovery hash table and fails when parity is insufficient. Check for a newer release without opening GitHub manually with `pliczip update` or `pliczip update --json`; it only reads the GitHub API and never downloads or executes files automatically.
 
 The fuzz target uses nightly Rust: `rustup toolchain install nightly && RUSTUP_TOOLCHAIN=nightly cargo fuzz run paths -- -max_total_time=60`.
+
+## v1.26.100
+
+Added accent selection, file context menus (rename, delete, select), empty-space actions (create file, sorting), and read-only TAR support. Archive creation remains `.plz`-only; ZIP, 7z, RAR and TAR can be read, tested and extracted.

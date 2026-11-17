@@ -118,3 +118,7 @@ Windows, ya están implementados para archivos de un solo volumen.
 - Nombres de archivo que no puedan representarse en UTF-8.
 - Firma digital del archivo.
 - Cifrado solo de nombres sin cifrar los datos.
+
+## v1.26.100
+
+Nuevo: selección de acento, menú contextual de archivos (renombrar, eliminar, seleccionar), acciones en el espacio vacío (crear archivo y ordenar) y lectura de TAR. La creación sigue siendo exclusiva de `.plz`; ZIP, 7z, RAR y TAR se pueden leer, comprobar y extraer.

@@ -1,7 +1,7 @@
 //! Read-only support for external archive formats.
 //!
 //! Archive creation remains exclusively in `.plz`. This module only detects,
-//! lists, verifies and extracts ZIP, 7z and RAR files.
+//! lists, verifies and extracts ZIP, 7z, RAR and TAR files.
 
 use anyhow::{bail, Context, Result};
 use std::fs::{self, File, OpenOptions};
@@ -25,6 +25,8 @@ pub enum Kind {
     SevenZip,
     /// RAR 1.3 through RAR 5 archive.
     Rar,
+    /// Uncompressed POSIX tar archive.
+    Tar,
 }
 
 impl Kind {
@@ -34,6 +36,7 @@ impl Kind {
             Self::Zip => "ZIP",
             Self::SevenZip => "7z",
             Self::Rar => "RAR",
+            Self::Tar => "TAR",
         }
     }
 }
@@ -68,7 +71,7 @@ pub struct Stats {
 /// deliberately not returned here and continues through the native backend.
 pub fn detect(path: &Path) -> Result<Option<Kind>> {
     let mut file = File::open(path).with_context(|| format!("не удалось открыть {:?}", path))?;
-    let mut header = [0u8; 8];
+    let mut header = [0u8; 512];
     let count = file.read(&mut header)?;
     let header = &header[..count];
     if header.len() >= SEVEN_Z_SIGNATURE.len() && header.starts_with(SEVEN_Z_SIGNATURE) {
@@ -83,6 +86,15 @@ pub fn detect(path: &Path) -> Result<Option<Kind>> {
     {
         return Ok(Some(Kind::Zip));
     }
+    if header.len() >= 262 && &header[257..262] == b"ustar" {
+        return Ok(Some(Kind::Tar));
+    }
+    if path
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("tar"))
+    {
+        return Ok(Some(Kind::Tar));
+    }
     Ok(None)
 }
 
@@ -93,6 +105,7 @@ pub fn list(path: &Path, password: Option<&[u8]>) -> Result<(Kind, Vec<Entry>)> 
         Kind::Zip => list_zip(path, password)?,
         Kind::SevenZip => list_7z(path, password)?,
         Kind::Rar => list_rar(path, password)?,
+        Kind::Tar => list_tar(path)?,
     };
     Ok((kind, entries))
 }
@@ -109,6 +122,7 @@ pub fn extract(
         Kind::Zip => extract_zip(path, output, password, skip_existing)?,
         Kind::SevenZip => extract_7z(path, output, password, skip_existing)?,
         Kind::Rar => extract_rar(path, output, password, skip_existing)?,
+        Kind::Tar => extract_tar(path, output, skip_existing)?,
     };
     Ok((kind, stats))
 }
@@ -120,6 +134,7 @@ pub fn test(path: &Path, password: Option<&[u8]>) -> Result<(Kind, usize)> {
         Kind::Zip => test_zip(path, password)?,
         Kind::SevenZip => test_7z(path, password)?,
         Kind::Rar => test_rar(path, password)?,
+        Kind::Tar => test_tar(path)?,
     };
     Ok((kind, count))
 }
@@ -408,6 +423,94 @@ fn test_rar(path: &Path, password: Option<&[u8]>) -> Result<usize> {
     Ok(count)
 }
 
+fn list_tar(path: &Path) -> Result<Vec<Entry>> {
+    let file =
+        File::open(path).with_context(|| format!("не удалось открыть TAR-архив {:?}", path))?;
+    let mut archive = tar::Archive::new(file);
+    let mut entries = Vec::new();
+    for item in archive
+        .entries()
+        .context("не удалось прочитать TAR-архив")?
+    {
+        let entry = item.context("не удалось прочитать элемент TAR")?;
+        let raw = entry.path().context("некорректный путь элемента TAR")?;
+        let raw = raw.to_string_lossy();
+        if is_root_entry(&raw) {
+            continue;
+        }
+        let kind = entry.header().entry_type();
+        if !kind.is_file() && !kind.is_dir() {
+            continue;
+        }
+        entries.push(Entry {
+            path: normalized_path(&raw)?,
+            size: entry.size(),
+            is_dir: kind.is_dir(),
+        });
+    }
+    Ok(entries)
+}
+
+fn extract_tar(path: &Path, output: &Path, skip_existing: bool) -> Result<Stats> {
+    let file =
+        File::open(path).with_context(|| format!("не удалось открыть TAR-архив {:?}", path))?;
+    let mut archive = tar::Archive::new(file);
+    let mut stats = Stats::default();
+    for item in archive
+        .entries()
+        .context("не удалось прочитать TAR-архив")?
+    {
+        let mut entry = item.context("не удалось прочитать элемент TAR")?;
+        let raw = entry.path().context("некорректный путь элемента TAR")?;
+        let raw = raw.to_string_lossy();
+        if is_root_entry(&raw) {
+            continue;
+        }
+        let kind = entry.header().entry_type();
+        if !kind.is_file() && !kind.is_dir() {
+            continue;
+        }
+        let rel = normalized_path(&raw)?;
+        let target = join_safe(output, &rel)?;
+        if kind.is_dir() {
+            fs::create_dir_all(&target)?;
+            stats.dirs += 1;
+            continue;
+        }
+        if skip_existing && target.exists() {
+            stats.skipped += 1;
+            continue;
+        }
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let mut out = File::create(&target)?;
+        let copied = io::copy(&mut entry, &mut out)?;
+        out.sync_all()?;
+        stats.files += 1;
+        stats.bytes = stats.bytes.saturating_add(copied);
+    }
+    Ok(stats)
+}
+
+fn test_tar(path: &Path) -> Result<usize> {
+    let file =
+        File::open(path).with_context(|| format!("не удалось открыть TAR-архив {:?}", path))?;
+    let mut archive = tar::Archive::new(file);
+    let mut count = 0;
+    for item in archive
+        .entries()
+        .context("не удалось прочитать TAR-архив")?
+    {
+        let mut entry = item.context("не удалось проверить элемент TAR")?;
+        if entry.header().entry_type().is_file() {
+            io::copy(&mut entry, &mut io::sink())?;
+            count += 1;
+        }
+    }
+    Ok(count)
+}
+
 struct CountingWriter {
     file: File,
     bytes: Arc<AtomicU64>,
@@ -486,6 +589,32 @@ mod tests {
         assert_eq!(
             fs::read(output.join("nested/data.bin")).unwrap(),
             [0, 1, 2, 3, 255]
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn tar_roundtrip() {
+        let root = std::env::temp_dir().join(format!("pliczip-tar-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("src/nested")).unwrap();
+        fs::write(root.join("src/nested/data.txt"), b"tar data").unwrap();
+        let archive = root.join("sample.tar");
+        let file = File::create(&archive).unwrap();
+        let mut builder = tar::Builder::new(file);
+        builder.append_dir_all("", root.join("src")).unwrap();
+        builder.finish().unwrap();
+        assert_eq!(detect(&archive).unwrap(), Some(Kind::Tar));
+        let (kind, entries) = list(&archive, None).unwrap();
+        assert_eq!(kind, Kind::Tar);
+        assert!(entries.iter().any(|entry| entry.path == "nested/data.txt"));
+        assert_eq!(test(&archive, None).unwrap().1, 1);
+        let output = root.join("out");
+        let (_, stats) = extract(&archive, &output, None, false).unwrap();
+        assert_eq!(stats.files, 1);
+        assert_eq!(
+            fs::read(output.join("nested/data.txt")).unwrap(),
+            b"tar data"
         );
         let _ = fs::remove_dir_all(root);
     }

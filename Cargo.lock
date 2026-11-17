@@ -3168,7 +3168,7 @@ checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 
 [[package]]
 name = "pliczip"
-version = "0.10.121"
+version = "1.26.100"
 dependencies = [
  "anyhow",
  "argon2",
@@ -3187,6 +3187,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sevenz-rust",
+ "tar",
  "ureq",
  "walkdir",
  "zeroize",
@@ -3195,7 +3196,7 @@ dependencies = [
 
 [[package]]
 name = "pliczip-gui"
-version = "0.10.121"
+version = "1.26.100"
 dependencies = [
  "anyhow",
  "eframe",
@@ -4093,6 +4094,16 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8eab9a99a024a169fe8a903cf9d4a3b3601109bcc13bd9e3c6fff259138626c4"
 dependencies = [
+ "libc",
+]
+
+[[package]]
+name = "tar"
+version = "0.4.46"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f6221d9a6003c78398e3b239969f352578258df48c8eb051caadae0015bc840"
+dependencies = [
+ "filetime",
  "libc",
 ]
 
