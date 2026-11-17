@@ -115,7 +115,7 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
                 };
                 if output.as_os_str().is_empty() {
                     if let Modal::Extract(dlg) = &mut app.modal {
-                        dlg.error = Some(app.locale.text("choose-folder-error").into());
+                        dlg.error = Some(app.locale.text("choose-folder-error"));
                     }
                 } else {
                     app.spawn_extract(output);
@@ -147,7 +147,7 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
                 };
                 if password.is_empty() {
                     if let Modal::Password(dlg) = &mut app.modal {
-                        dlg.error = Some(app.locale.text("password-required").into());
+                        dlg.error = Some(app.locale.text("password-required"));
                     }
                 } else {
                     app.open_now(path, Some(zeroize::Zeroizing::new(password)));
