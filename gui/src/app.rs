@@ -1,6 +1,7 @@
 use eframe::egui;
 use pliczip::prelude::*;
 use pliczip::{format, source};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
@@ -39,7 +40,10 @@ pub struct Loaded {
     /// Порядок строк таблицы с учётом фильтра и сортировки.
     pub view: Vec<usize>,
     /// Ключ, по которому построен `view`: пересчёт только при изменении.
-    view_key: Option<(String, Sort, bool)>,
+    view_key: Option<(String, Sort, bool, u64)>,
+    /// Пути каталогов, раскрытых в древовидном представлении.
+    pub expanded: HashSet<String>,
+    expanded_generation: u64,
 }
 
 /// Колонка, по которой отсортирована таблица.
@@ -104,17 +108,44 @@ pub fn saved_fraction(index: &PzIndex, entry: &PzEntry) -> Option<f32> {
 impl Loaded {
     /// Пересчитывает порядок строк, если фильтр или сортировка изменились.
     pub fn ensure_view(&mut self, sort: Sort, desc: bool) {
-        let key = (self.filter.to_lowercase(), sort, desc);
+        let key = (
+            self.filter.to_lowercase(),
+            sort,
+            desc,
+            self.expanded_generation,
+        );
         if self.view_key.as_ref() == Some(&key) {
             return;
         }
         let index = &self.meta.index;
         let filter = &key.0;
+        let flat = self.is_flat(sort);
+        let dirs: HashSet<&str> = index
+            .entries
+            .iter()
+            .filter(|entry| entry.kind == Kind::Dir)
+            .map(|entry| entry.path.as_str())
+            .collect();
+        let visible = |entry: &PzEntry| {
+            if flat {
+                return true;
+            }
+            let mut parent = entry.path.as_str();
+            while let Some((prefix, _)) = parent.rsplit_once('/') {
+                if dirs.contains(prefix) && !self.expanded.contains(prefix) {
+                    return false;
+                }
+                parent = prefix;
+            }
+            true
+        };
         let mut view: Vec<usize> = index
             .entries
             .iter()
             .enumerate()
-            .filter(|(_, e)| filter.is_empty() || e.path.to_lowercase().contains(filter.as_str()))
+            .filter(|(_, e)| {
+                (filter.is_empty() || e.path.to_lowercase().contains(filter.as_str())) && visible(e)
+            })
             .map(|(i, _)| i)
             .collect();
         let method = |e: &PzEntry| {
@@ -144,6 +175,13 @@ impl Loaded {
         }
         self.view = view;
         self.view_key = Some(key);
+    }
+
+    pub fn toggle_dir(&mut self, path: &str) {
+        if !self.expanded.remove(path) {
+            self.expanded.insert(path.to_owned());
+        }
+        self.expanded_generation = self.expanded_generation.wrapping_add(1);
     }
 
     /// Плоский ли список: при фильтре или сортировке не по пути дерево не строится.
@@ -305,9 +343,9 @@ impl App {
             Ok(v) => v,
             Err(err) => {
                 self.modal = Modal::Error {
-                    title: "Не удалось открыть архив".into(),
+                    title: self.locale.text("open-error-title"),
                     message: format!("{err:#}"),
-                    hint: "Проверь, что файл — архив PlicZip (.plz) и не повреждён.".into(),
+                    hint: self.locale.text("open-error-plz-hint"),
                 };
                 return;
             }
@@ -358,7 +396,19 @@ impl App {
                     selected: None,
                     view: Vec::new(),
                     view_key: None,
+                    expanded: HashSet::new(),
+                    expanded_generation: 0,
                 });
+                if let Some(loaded) = &mut self.loaded {
+                    loaded.expanded = loaded
+                        .meta
+                        .index
+                        .entries
+                        .iter()
+                        .filter(|entry| entry.kind == Kind::Dir)
+                        .map(|entry| entry.path.clone())
+                        .collect();
+                }
                 self.modal = Modal::None;
                 self.last_action = None;
             }
@@ -368,9 +418,9 @@ impl App {
                     pw.password.clear();
                 } else {
                     self.modal = Modal::Error {
-                        title: "Не удалось открыть архив".into(),
+                        title: self.locale.text("open-error-title"),
                         message: format!("{err:#}"),
-                        hint: "Если архив зашифрован, введи пароль ещё раз.".into(),
+                        hint: self.locale.text("open-error-password-hint"),
                     };
                 }
             }
@@ -424,6 +474,12 @@ impl App {
                     selected: None,
                     view: (0..entries.len()).collect(),
                     view_key: None,
+                    expanded: entries
+                        .iter()
+                        .filter(|entry| entry.is_dir)
+                        .map(|entry| entry.path.clone())
+                        .collect(),
+                    expanded_generation: 0,
                 });
                 self.modal = Modal::None;
                 self.last_action = Some(format!(
@@ -440,7 +496,7 @@ impl App {
                     self.modal = Modal::Error {
                         title: format!("Не удалось открыть {}-архив", kind.name()),
                         message: format!("{err:#}"),
-                        hint: "Проверь пароль и целостность внешнего архива.".into(),
+                        hint: self.locale.text("external-open-error-hint"),
                     };
                 }
             }
@@ -464,7 +520,7 @@ impl App {
             ..Default::default()
         };
         self.rx = Some(rx);
-        self.op = Some(OpState::new("распаковка", total));
+        self.op = Some(OpState::new(self.locale.text("operation-extract"), total));
         self.modal = Modal::None;
         std::thread::spawn(move || {
             let stats = if external_kind.is_some() {
@@ -494,6 +550,73 @@ impl App {
         });
     }
 
+    /// Добавляет перетащенные файлы в native-архив через безопасную пересборку.
+    /// Перед заменой исходник сохраняется как `.plz.bak`.
+    pub fn spawn_add_to_archive(&mut self, sources: Vec<PathBuf>) {
+        let Some(loaded) = self.loaded.as_ref() else {
+            return;
+        };
+        if loaded.external_kind.is_some() || sources.is_empty() {
+            return;
+        }
+        let archive = loaded.path.clone();
+        let password = loaded.password.clone();
+        let (sink, tx, rx) = progress::channel_with_sink();
+        self.rx = Some(rx);
+        self.op = Some(OpState::new(self.locale.text("operation-add"), 0));
+        std::thread::spawn(move || {
+            let result = (|| -> anyhow::Result<CreateStats> {
+                let stamp = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)?
+                    .as_nanos();
+                let temp = std::env::temp_dir().join(format!("pliczip-add-{stamp}"));
+                std::fs::create_dir_all(&temp)?;
+                let result = (|| -> anyhow::Result<CreateStats> {
+                    let mut ar =
+                        Archive::open_with(&archive, password.as_deref().map(String::as_str))?;
+                    ar.extract(&ExtractOptions {
+                        output: temp.clone(),
+                        show_progress: false,
+                        ..Default::default()
+                    })?;
+                    for source in &sources {
+                        let name = source
+                            .file_name()
+                            .ok_or_else(|| anyhow::anyhow!("could not determine file name"))?;
+                        copy_path(source, &temp.join(name))?;
+                    }
+                    let inputs: Vec<PathBuf> = std::fs::read_dir(&temp)?
+                        .filter_map(Result::ok)
+                        .map(|entry| entry.path())
+                        .collect();
+                    let replacement = temp.with_extension("plz.tmp");
+                    let opts = CreateOptions {
+                        password,
+                        show_progress: false,
+                        progress: Some(std::sync::Arc::new(sink)),
+                        ..Default::default()
+                    };
+                    let stats = pliczip::writer::create(&replacement, &inputs, &opts)?;
+                    let backup = archive.with_extension("plz.bak");
+                    let _ = std::fs::remove_file(&backup);
+                    std::fs::rename(&archive, &backup)?;
+                    if let Err(err) = std::fs::rename(&replacement, &archive) {
+                        let _ = std::fs::rename(&backup, &archive);
+                        return Err(err.into());
+                    }
+                    let _ = std::fs::remove_file(backup);
+                    Ok(stats)
+                })();
+                let _ = std::fs::remove_dir_all(&temp);
+                result
+            })();
+            let _ = tx.send(Msg::Done(Box::new(Done::Create {
+                path: archive,
+                stats: result.map_err(|err| format!("{err:#}")),
+            })));
+        });
+    }
+
     pub fn spawn_test(&mut self) {
         let Some(loaded) = self.loaded.as_ref() else {
             return;
@@ -506,7 +629,7 @@ impl App {
         let (sink, tx, rx) = progress::channel_with_sink();
         let sink = std::sync::Arc::new(sink);
         self.rx = Some(rx);
-        self.op = Some(OpState::new("проверка", total));
+        self.op = Some(OpState::new(self.locale.text("operation-test"), total));
         std::thread::spawn(move || {
             let report = if external_kind.is_some() {
                 let key = password.as_ref().map(|value| value.as_bytes().to_vec());
@@ -538,7 +661,7 @@ impl App {
         let path = loaded.path.clone();
         let (tx, rx) = std::sync::mpsc::channel();
         self.rx = Some(rx);
-        self.op = Some(OpState::new("восстановление", 0));
+        self.op = Some(OpState::new(self.locale.text("operation-repair"), 0));
         std::thread::spawn(move || {
             let report = pliczip::recovery::repair_file(&path, false).map_err(|e| format!("{e:#}"));
             let _ = tx.send(Msg::Done(Box::new(Done::Repair { report })));
@@ -566,7 +689,7 @@ impl App {
         let path = dlg.path.clone();
         let (tx, rx) = std::sync::mpsc::channel();
         self.rx = Some(rx);
-        self.op = Some(OpState::new("диагностика восстановления", 0));
+        self.op = Some(OpState::new(self.locale.text("operation-scan"), 0));
         std::thread::spawn(move || {
             let result = pliczip::source::FileSource::open(&path)
                 .map_err(|err| format!("{err:#}"))
@@ -595,7 +718,7 @@ impl App {
         self.update = UpdateState::Checking;
         let (tx, rx) = std::sync::mpsc::channel();
         self.rx = Some(rx);
-        self.op = Some(OpState::new("проверка обновлений", 0));
+        self.op = Some(OpState::new(self.locale.text("operation-update"), 0));
         std::thread::spawn(move || {
             let result = pliczip::update::check_latest().map_err(|err| format!("{err:#}"));
             let _ = tx.send(Msg::Done(Box::new(Done::Update { result })));
@@ -605,17 +728,17 @@ impl App {
     pub fn spawn_create(&mut self, dlg: &CreateDlg) -> Result<(), String> {
         let output = PathBuf::from(dlg.output.trim());
         if output.as_os_str().is_empty() {
-            return Err("укажи, куда сохранить архив".into());
+            return Err(self.locale.text("save-path-required"));
         }
         if dlg.sources.is_empty() {
-            return Err("добавь файлы или каталоги".into());
+            return Err(self.locale.text("sources-required"));
         }
         let password = if dlg.encrypt {
             if dlg.password.is_empty() {
-                return Err("пароль не может быть пустым".into());
+                return Err(self.locale.text("password-required"));
             }
             if dlg.password != dlg.password2 {
-                return Err("пароли не совпадают".into());
+                return Err(self.locale.text("password-mismatch"));
             }
             Some(Zeroizing::new(dlg.password.clone()))
         } else {
@@ -643,7 +766,7 @@ impl App {
             ..Default::default()
         };
         self.rx = Some(rx);
-        self.op = Some(OpState::new("сжатие", 0));
+        self.op = Some(OpState::new(self.locale.text("operation-create"), 0));
         self.modal = Modal::None;
         std::thread::spawn(move || {
             let stats =
@@ -677,9 +800,9 @@ impl App {
                     self.op = None;
                     self.rx = None;
                     self.modal = Modal::Error {
-                        title: "Операция прервана".into(),
-                        message: "рабочий поток завершился неожиданно".into(),
-                        hint: "Открой архив заново и повтори.".into(),
+                        title: self.locale.text("operation-interrupted-title"),
+                        message: self.locale.text("operation-interrupted-message"),
+                        hint: self.locale.text("operation-interrupted-hint"),
                     };
                     return;
                 }
@@ -716,8 +839,11 @@ impl App {
             return;
         }
         let picked = rfd::FileDialog::new()
-            .add_filter("Архивы", &["plz", "zip", "7z", "rar"])
-            .set_title("Открыть архив")
+            .add_filter(
+                self.locale.text("archive-filter"),
+                &["plz", "zip", "7z", "rar"],
+            )
+            .set_title(self.locale.text("open-dialog-title"))
             .pick_file();
         if let Some(path) = picked {
             self.begin_open(path);
@@ -752,20 +878,25 @@ impl App {
         match done {
             Done::Extract { stats } => match stats {
                 Ok(stats) => {
-                    let text = format!(
-                        "распаковано: {} · {}",
-                        plural_ru(stats.files, "файл", "файла", "файлов"),
-                        pliczip::util::human_bytes(stats.bytes)
+                    let count = localized_count(
+                        &self.locale,
+                        stats.files,
+                        "file-one",
+                        "file-few",
+                        "file-many",
+                    );
+                    let text = self.locale.format(
+                        "extracted",
+                        &[&count, &pliczip::util::human_bytes(stats.bytes)],
                     );
                     self.notify(text.clone(), true);
                     self.last_action = Some(text);
                 }
                 Err(err) => {
                     self.modal = Modal::Error {
-                        title: "Распаковка не удалась".into(),
+                        title: self.locale.text("extract-error-title"),
                         message: err,
-                        hint: "Часть файлов могла записаться до ошибки — проверь каталог вывода."
-                            .into(),
+                        hint: self.locale.text("extract-error-hint"),
                     };
                 }
             },
@@ -774,10 +905,14 @@ impl App {
                     if let Some(loaded) = &mut self.loaded {
                         loaded.integrity = Integrity::Verified(Instant::now());
                     }
-                    let text = format!(
-                        "целостность подтверждена · {}",
-                        plural_ru(report.files, "файл", "файла", "файлов")
+                    let count = localized_count(
+                        &self.locale,
+                        report.files,
+                        "file-one",
+                        "file-few",
+                        "file-many",
                     );
+                    let text = self.locale.format("integrity-ok", &[&count]);
                     self.notify(text.clone(), true);
                     self.last_action = Some(text);
                 }
@@ -786,19 +921,20 @@ impl App {
                         loaded.integrity = Integrity::Failed(err.clone());
                     }
                     self.modal = Modal::Error {
-                        title: "Проверка не пройдена".into(),
+                        title: self.locale.text("verify-error-title"),
                         message: err,
-                        hint: "Восстанови повреждённый файл из исходника или пересоздай архив \
-                               из целой копии. Остальные файлы, скорее всего, в порядке."
-                            .into(),
+                        hint: self.locale.text("verify-error-hint"),
                     };
                 }
             },
             Done::Repair { report } => match report {
                 Ok(report) => {
-                    let text = format!(
-                        "восстановлено: {} data, {} parity",
-                        report.restored_data, report.restored_parity
+                    let text = self.locale.format(
+                        "repaired",
+                        &[
+                            &report.restored_data.to_string(),
+                            &report.restored_parity.to_string(),
+                        ],
                     );
                     self.notify(text.clone(), true);
                     self.last_action = Some(text);
@@ -808,9 +944,9 @@ impl App {
                 }
                 Err(err) => {
                     self.modal = Modal::Error {
-                        title: "Восстановление не удалось".into(),
+                        title: self.locale.text("repair-error-title"),
                         message: err,
-                        hint: "Проверь, что parity достаточно для восстановления.".into(),
+                        hint: self.locale.text("repair-error-hint"),
                     };
                 }
             },
@@ -821,12 +957,13 @@ impl App {
             }
             Done::Create { path, stats } => match stats {
                 Ok(stats) => {
-                    let text = format!(
-                        "создан {} · {}",
-                        path.file_name()
-                            .map(|n| n.to_string_lossy().into_owned())
-                            .unwrap_or_default(),
-                        pliczip::util::human_bytes(stats.archive_bytes)
+                    let name = path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    let text = self.locale.format(
+                        "created",
+                        &[&name, &pliczip::util::human_bytes(stats.archive_bytes)],
                     );
                     self.notify(text.clone(), true);
                     self.begin_open(path);
@@ -834,9 +971,9 @@ impl App {
                 }
                 Err(err) => {
                     self.modal = Modal::Error {
-                        title: "Создание не удалось".into(),
+                        title: self.locale.text("create-error-title"),
                         message: err,
-                        hint: "Проверь права на запись и место на диске.".into(),
+                        hint: self.locale.text("create-error-hint"),
                     };
                 }
             },
@@ -850,18 +987,18 @@ impl App {
                             latest: release.latest.clone(),
                             url: release.url,
                         };
-                        self.notify(format!("доступно обновление {}", release.latest), true);
+                        self.notify(self.locale.format("update-found", &[&release.latest]), true);
                     } else {
                         self.update = UpdateState::NotFound;
-                        self.notify(format!("установлена актуальная версия {current}"), true);
+                        self.notify(self.locale.format("update-current", &[&current]), true);
                     }
                 }
                 Err(err) => {
                     self.update = UpdateState::Error;
                     self.modal = Modal::Error {
-                        title: "Проверка обновлений не удалась".into(),
+                        title: self.locale.text("update-error-title"),
                         message: err,
-                        hint: "Проверь подключение к интернету и повтори попытку.".into(),
+                        hint: self.locale.text("update-error-hint"),
                     };
                 }
             },
@@ -883,7 +1020,15 @@ impl App {
             let archive = archive.clone();
             self.begin_open(archive);
         } else if self.modal_kind() == ModalKind::None {
-            self.modal = Modal::Create(CreateDlg::from_sources(dropped));
+            if self
+                .loaded
+                .as_ref()
+                .is_some_and(|loaded| loaded.external_kind.is_none())
+            {
+                self.spawn_add_to_archive(dropped);
+            } else {
+                self.modal = Modal::Create(CreateDlg::from_sources(dropped));
+            }
         }
     }
 }
@@ -932,7 +1077,7 @@ impl eframe::App for App {
         views::central(self, ui, p, busy);
 
         dialogs::draw(self, &ctx, p);
-        views::drop_overlay(&ctx, p);
+        views::drop_overlay(&ctx, p, &self.locale);
         views::toast(self, &ctx, p);
     }
 }
@@ -1003,8 +1148,36 @@ fn is_archive_path(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+fn copy_path(source: &Path, target: &Path) -> anyhow::Result<()> {
+    if source.is_dir() {
+        std::fs::create_dir_all(target)?;
+        for child in std::fs::read_dir(source)? {
+            let child = child?;
+            copy_path(&child.path(), &target.join(child.file_name()))?;
+        }
+    } else {
+        std::fs::copy(source, target)?;
+    }
+    Ok(())
+}
+
 pub fn plural_ru(n: usize, one: &str, few: &str, many: &str) -> String {
     pliczip::util::plural(n, one, few, many)
+}
+
+pub fn localized_count(locale: &Locale, n: usize, one: &str, few: &str, many: &str) -> String {
+    let key = if locale.language == "Русский" {
+        match n % 10 {
+            1 if n % 100 != 11 => one,
+            2..=4 if !(12..=14).contains(&(n % 100)) => few,
+            _ => many,
+        }
+    } else if n == 1 {
+        one
+    } else {
+        many
+    };
+    format!("{n} {}", locale.text(key))
 }
 
 pub fn parse_size(text: &str) -> Result<u64, String> {

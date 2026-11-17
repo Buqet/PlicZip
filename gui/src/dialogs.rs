@@ -115,7 +115,7 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
                 };
                 if output.as_os_str().is_empty() {
                     if let Modal::Extract(dlg) = &mut app.modal {
-                        dlg.error = Some("укажи каталог для распаковки".into());
+                        dlg.error = Some(app.locale.text("choose-folder-error").into());
                     }
                 } else {
                     app.spawn_extract(output);
@@ -147,7 +147,7 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
                 };
                 if password.is_empty() {
                     if let Modal::Password(dlg) = &mut app.modal {
-                        dlg.error = Some("пароль не может быть пустым".into());
+                        dlg.error = Some(app.locale.text("password-required").into());
                     }
                 } else {
                     app.open_now(path, Some(zeroize::Zeroizing::new(password)));
@@ -162,18 +162,21 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
             let mut repair = false;
             dialog(
                 ctx,
-                "Мастер восстановления",
+                app.locale.text("recovery-title"),
                 Icon::Shield,
                 p.accent,
                 p,
                 |ui| {
                     ui.set_min_width(470.0);
                     ui.label(
-                        egui::RichText::new("Шаг 1 из 2 · диагностика")
+                        egui::RichText::new(app.locale.text("recovery-step-diagnosis"))
                             .strong()
                             .color(p.text),
                     );
-                    ui.label(egui::RichText::new("Пароль не требуется: recovery record работает с зашифрованными байтами.").color(p.muted));
+                    ui.label(
+                        egui::RichText::new(app.locale.text("recovery-password-note"))
+                            .color(p.muted),
+                    );
                     ui.add_space(10.0);
                     let report = match &app.modal {
                         Modal::Recovery(dlg) => dlg.report.as_ref(),
@@ -182,7 +185,7 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
                     match report {
                         None => {
                             ui.spinner();
-                            ui.label("Проверяем повреждённые куски и доступность parity…");
+                            ui.label(app.locale.text("recovery-checking"));
                         }
                         Some(Err(err)) => {
                             ui.colored_label(p.err, format!("Диагностика не удалась: {err}"));
@@ -209,25 +212,23 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
                                 report.bad_parity.len()
                             ));
                             if !report.unrecoverable_groups.is_empty() {
-                                ui.colored_label(
-                                    p.err,
-                                    "Группы с невосстановимым повреждением: недостаточно parity.",
-                                );
+                                ui.colored_label(p.err, app.locale.text("recovery-groups-error"));
                             }
                             ui.add_space(8.0);
                             if report.recoverable() && !report.is_clean() {
                                 ui.label(
-                                    egui::RichText::new("Шаг 2 из 2 · восстановление")
+                                    egui::RichText::new(app.locale.text("recovery-step-repair"))
                                         .strong()
                                         .color(p.text),
                                 );
-                                ui.label("После восстановления архив будет автоматически проверен повторно.");
-                                repair = primary_button(ui, "Восстановить", p).clicked();
+                                ui.label(app.locale.text("recovery-recheck"));
+                                repair =
+                                    primary_button(ui, app.locale.text("recover"), p).clicked();
                             }
                         }
                     }
                     ui.add_space(12.0);
-                    if action_button(ui, "Закрыть").clicked() {
+                    if action_button(ui, app.locale.text("close-dialog")).clicked() {
                         close = true;
                     }
                 },
@@ -277,10 +278,7 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
                     ui.set_max_width(420.0);
                     ui.label(egui::RichText::new("PlicZip").size(24.0).color(p.accent));
                     ui.add_space(6.0);
-                    ui.label(
-                        egui::RichText::new("Архиватор, который не врёт о целостности.")
-                            .color(p.text),
-                    );
+                    ui.label(egui::RichText::new(app.locale.text("archive-motto")).color(p.text));
                     ui.add_space(10.0);
                     ui.label(
                         egui::RichText::new(format!(
@@ -335,28 +333,41 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
                             .strong()
                             .color(p.text),
                     );
-                    ui.horizontal(|ui| {
-                        ui.selectable_value(
-                            &mut selected_language,
-                            Language::Russian,
-                            &app.locale.language_russian,
-                        );
-                        ui.selectable_value(
-                            &mut selected_language,
-                            Language::English,
-                            &app.locale.language_english,
-                        );
-                    });
+                    egui::Frame::new()
+                        .fill(p.panel)
+                        .corner_radius(8.0)
+                        .inner_margin(egui::Margin::same(4))
+                        .show(ui, |ui| {
+                            for language in Language::ALL {
+                                let (name, selected) = match language {
+                                    Language::Russian => (
+                                        &app.locale.language_russian,
+                                        selected_language == language,
+                                    ),
+                                    Language::English => (
+                                        &app.locale.language_english,
+                                        selected_language == language,
+                                    ),
+                                };
+                                let response = ui.selectable_label(
+                                    selected,
+                                    egui::RichText::new(format!(
+                                        "{}  {}                                      {}%",
+                                        language.flag(),
+                                        name,
+                                        language.completion()
+                                    ))
+                                    .size(13.0),
+                                );
+                                if response.clicked() {
+                                    selected_language = language;
+                                }
+                            }
+                        });
                     ui.label(
-                        egui::RichText::new(format!("SOML: {}", app.locale.language))
+                        egui::RichText::new(app.locale.text("localization-format"))
                             .size(11.0)
                             .color(p.dim),
-                    );
-                    ui.add_space(6.0);
-                    ui.label(
-                        egui::RichText::new(&app.locale.settings_language_disabled)
-                            .size(12.0)
-                            .color(p.muted),
                     );
                     ui.add_space(14.0);
                     if primary_button(ui, &app.locale.about_close, p).clicked() {
@@ -494,7 +505,7 @@ fn create_dialog(
         ui.text_edit_singleline(&mut dlg.output);
         if action_button(ui, locale.text("browse")).clicked() {
             if let Some(picked) = rfd::FileDialog::new()
-                .set_file_name("архив.plz")
+                .set_file_name(locale.text("archive-default-file"))
                 .set_title(locale.text("save-archive"))
                 .save_file()
             {
@@ -567,11 +578,11 @@ fn create_dialog(
         ui.label(egui::RichText::new(locale.text("volume")).color(p.muted));
         ui.add(
             egui::TextEdit::singleline(&mut dlg.volume)
-                .hint_text("например 700M")
+                .hint_text(locale.text("volume-example"))
                 .desired_width(120.0),
         );
         ui.label(
-            egui::RichText::new("— пусто: один файл")
+            egui::RichText::new(locale.text("volume-empty"))
                 .size(11.5)
                 .color(p.dim),
         );
@@ -588,7 +599,7 @@ fn create_dialog(
 
     ui.add_space(14.0);
     ui.horizontal(|ui| {
-        if action_button(ui, "Отмена").clicked() {
+        if action_button(ui, locale.text("cancel-action")).clicked() {
             request = CreateRequest::Cancel;
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -629,7 +640,7 @@ fn extract_dialog(
     }
     ui.add_space(14.0);
     ui.horizontal(|ui| {
-        if action_button(ui, "Отмена").clicked() {
+        if action_button(ui, locale.text("cancel-action")).clicked() {
             *cancel = true;
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -664,7 +675,7 @@ fn password_dialog(
     }
     ui.add_space(14.0);
     ui.horizontal(|ui| {
-        if action_button(ui, "Отмена").clicked() {
+        if action_button(ui, locale.text("cancel-action")).clicked() {
             *cancel = true;
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {

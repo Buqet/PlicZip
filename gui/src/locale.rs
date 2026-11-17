@@ -21,7 +21,6 @@ pub struct Locale {
     pub settings_language: String,
     pub language_russian: String,
     pub language_english: String,
-    pub settings_language_disabled: String,
     pub about_changes: String,
     pub about_close: String,
     #[serde(flatten)]
@@ -42,6 +41,14 @@ impl Locale {
             .get(key)
             .cloned()
             .unwrap_or_else(|| key.to_owned())
+    }
+
+    pub fn format(&self, key: &str, args: &[&str]) -> String {
+        let mut text = self.text(key);
+        for arg in args {
+            text = text.replacen("{}", arg, 1);
+        }
+        text
     }
 }
 

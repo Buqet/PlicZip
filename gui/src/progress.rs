@@ -60,7 +60,7 @@ pub enum Msg {
 /// Состояние выполняющейся операции для окна прогресса.
 pub struct OpState {
     /// Что именно делаем: «сжатие», «распаковка», «проверка».
-    pub label: &'static str,
+    pub label: String,
     /// Общий объём байт.
     pub total: u64,
     /// Сколько сделано.
@@ -70,9 +70,9 @@ pub struct OpState {
 }
 
 impl OpState {
-    pub fn new(label: &'static str, total: u64) -> Self {
+    pub fn new(label: impl Into<String>, total: u64) -> Self {
         OpState {
-            label,
+            label: label.into(),
             total,
             done: 0,
             started: Instant::now(),

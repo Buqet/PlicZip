@@ -9,6 +9,7 @@ use pliczip::prelude::*;
 
 use crate::app::{packed_size, plural_ru, saved_fraction, App, CreateDlg, Integrity, Modal, Sort};
 use crate::config::Accent;
+use crate::locale::Locale;
 use crate::theme::Palette;
 use crate::widgets::{self, mix, Icon, Kind as Btn};
 
@@ -404,13 +405,24 @@ pub fn archive_header(app: &mut App, ui: &mut egui::Ui, p: Palette) {
                     ui.spacing_mut().item_spacing.x = 6.0;
                     let index = &loaded.meta.index;
                     let (icon, text, color) = match &loaded.integrity {
-                        Integrity::Verified(_) => (Icon::Check, "проверен", p.ok),
-                        Integrity::Failed(_) => (Icon::Cross, "повреждён", p.err),
-                        Integrity::Untested => (Icon::Shield, "не проверен", p.muted),
+                        Integrity::Verified(_) => {
+                            (Icon::Check, app.locale.text("integrity-verified"), p.ok)
+                        }
+                        Integrity::Failed(_) => {
+                            (Icon::Cross, app.locale.text("integrity-failed"), p.err)
+                        }
+                        Integrity::Untested => {
+                            (Icon::Shield, app.locale.text("integrity-untested"), p.muted)
+                        }
                     };
-                    widgets::chip(ui, Some(icon), text, color);
+                    widgets::chip(ui, Some(icon), &text, color);
                     if loaded.meta.encrypted {
-                        widgets::chip(ui, Some(Icon::Lock), "зашифрован", p.accent);
+                        widgets::chip(
+                            ui,
+                            Some(Icon::Lock),
+                            &app.locale.text("encrypted"),
+                            p.accent,
+                        );
                     }
                     if loaded.meta.volumes > 1 {
                         let vols = plural_ru(loaded.meta.volumes, "том", "тома", "томов");
@@ -451,6 +463,7 @@ pub fn archive_header(app: &mut App, ui: &mut egui::Ui, p: Palette) {
 pub fn side_panel(app: &mut App, ui: &mut egui::Ui, p: Palette) {
     egui::Panel::right("summary")
         .exact_size(300.0)
+        .show_separator_line(false)
         .frame(egui::Frame::new().fill(p.bg).inner_margin(egui::Margin {
             left: 0,
             right: 16,
@@ -475,7 +488,7 @@ fn compression_card(app: &App, ui: &mut egui::Ui, p: Palette) {
     let Some(loaded) = &app.loaded else { return };
     if let Some(kind) = loaded.external_kind {
         widgets::card(ui, p, |ui| {
-            widgets::section(ui, "ВНЕШНИЙ АРХИВ", p);
+            widgets::section(ui, &app.locale.text("external-section"), p);
             ui.add_space(4.0);
             ui.label(
                 egui::RichText::new(format!(
@@ -486,7 +499,7 @@ fn compression_card(app: &App, ui: &mut egui::Ui, p: Palette) {
             );
             ui.add_space(6.0);
             ui.label(
-                egui::RichText::new("PlicZip работает в режиме чтения, проверки и распаковки.")
+                egui::RichText::new(app.locale.text("external-readonly"))
                     .size(11.5)
                     .color(p.dim),
             );
@@ -498,7 +511,7 @@ fn compression_card(app: &App, ui: &mut egui::Ui, p: Palette) {
     let stored = index.stored_size();
     let saved = pliczip::util::saved_percent(raw, stored);
     widgets::card(ui, p, |ui| {
-        widgets::section(ui, "СЖАТИЕ", p);
+        widgets::section(ui, &app.locale.text("compression-section"), p);
         ui.add_space(4.0);
         ui.horizontal(|ui| {
             let (rect, _) = ui.allocate_exact_size(vec2(104.0, 104.0), Sense::hover());
@@ -527,7 +540,7 @@ fn compression_card(app: &App, ui: &mut egui::Ui, p: Palette) {
             painter.text(
                 rect.center() + vec2(0.0, 15.0),
                 Align2::CENTER_CENTER,
-                "экономия",
+                app.locale.text("saved-label"),
                 FontId::proportional(11.0),
                 p.dim,
             );
@@ -535,9 +548,19 @@ fn compression_card(app: &App, ui: &mut egui::Ui, p: Palette) {
             ui.add_space(8.0);
             ui.vertical(|ui| {
                 ui.add_space(14.0);
-                stat(ui, "До сжатия", &pliczip::util::human_bytes(raw), p);
+                stat(
+                    ui,
+                    &app.locale.text("before-compression"),
+                    &pliczip::util::human_bytes(raw),
+                    p,
+                );
                 ui.add_space(6.0);
-                stat(ui, "В архиве", &pliczip::util::human_bytes(stored), p);
+                stat(
+                    ui,
+                    &app.locale.text("in-archive"),
+                    &pliczip::util::human_bytes(stored),
+                    p,
+                );
             });
         });
         // Полоса: какая доля исходного объёма осталась.
@@ -553,10 +576,11 @@ fn compression_card(app: &App, ui: &mut egui::Ui, p: Palette) {
         fill.set_width((bar.width() * frac).max(6.0));
         ui.painter().rect_filled(fill, 3.0, p.accent);
         ui.label(
-            egui::RichText::new(format!(
-                "архив занимает {:.1}% исходного объёма",
-                frac * 100.0
-            ))
+            egui::RichText::new(
+                app.locale
+                    .text("archive-ratio")
+                    .replace("{:.1}", &format!("{:.1}", frac * 100.0)),
+            )
             .size(11.0)
             .color(p.dim),
         );
@@ -580,15 +604,20 @@ fn integrity_card(app: &mut App, ui: &mut egui::Ui, p: Palette) {
     let (icon, title, detail, color) = match &loaded.integrity {
         Integrity::Verified(at) => (
             Icon::Check,
-            "Целостность подтверждена",
+            app.locale.text("integrity-verified"),
             format!("BLAKE3 сошёлся · {}", ago(*at)),
             p.ok,
         ),
-        Integrity::Failed(msg) => (Icon::Cross, "Проверка не пройдена", msg.clone(), p.err),
+        Integrity::Failed(msg) => (
+            Icon::Cross,
+            app.locale.text("integrity-failed"),
+            msg.clone(),
+            p.err,
+        ),
         Integrity::Untested => (
             Icon::Shield,
-            "Не проверено",
-            "сверим BLAKE3 каждого файла и блока".to_string(),
+            app.locale.text("integrity-untested"),
+            app.locale.text("integrity-detail"),
             p.muted,
         ),
     };
@@ -615,10 +644,10 @@ fn integrity_card(app: &mut App, ui: &mut egui::Ui, p: Palette) {
             });
             ui.add_space(8.0);
             let label = match loaded.integrity {
-                Integrity::Untested => "Проверить",
-                _ => "Проверить снова",
+                Integrity::Untested => app.locale.text("verify"),
+                _ => app.locale.text("verify-again"),
             };
-            if widgets::button(ui, Some(Icon::Shield), label, Btn::Normal, !busy).clicked() {
+            if widgets::button(ui, Some(Icon::Shield), &label, Btn::Normal, !busy).clicked() {
                 run = true;
             }
         });
@@ -633,37 +662,43 @@ fn archive_card(app: &App, ui: &mut egui::Ui, p: Palette) {
     let index = &loaded.meta.index;
     let (files, dirs, links) = index.counts();
     widgets::card(ui, p, |ui| {
-        widgets::section(ui, "АРХИВ", p);
+        widgets::section(ui, &app.locale.text("archive-section"), p);
         ui.add_space(2.0);
-        kv(ui, "Файлов", &files.to_string(), p);
-        kv(ui, "Папок", &dirs.to_string(), p);
+        kv(ui, &app.locale.text("files-label"), &files.to_string(), p);
+        kv(ui, &app.locale.text("dirs-label"), &dirs.to_string(), p);
         if let Some(kind) = loaded.external_kind {
-            kv(ui, "Формат", kind.name(), p);
-            kv(ui, "Режим", "только чтение", p);
-        }
-        if links > 0 {
-            kv(ui, "Ссылок", &links.to_string(), p);
-        }
-        kv(ui, "Блоков", &index.blocks.len().to_string(), p);
-        if loaded.external_kind.is_none() {
+            kv(ui, &app.locale.text("format-label"), kind.name(), p);
             kv(
                 ui,
-                "Режим",
-                if index.solid {
-                    "solid"
-                } else {
-                    "обычный"
-                },
+                &app.locale.text("mode-label"),
+                &app.locale.text("readonly-label"),
                 p,
             );
         }
+        if links > 0 {
+            kv(ui, &app.locale.text("links-label"), &links.to_string(), p);
+        }
+        kv(
+            ui,
+            &app.locale.text("blocks-label"),
+            &index.blocks.len().to_string(),
+            p,
+        );
+        if loaded.external_kind.is_none() {
+            let mode = if index.solid {
+                app.locale.text("mode-solid")
+            } else {
+                app.locale.text("mode-normal")
+            };
+            kv(ui, &app.locale.text("mode-label"), &mode, p);
+        }
         if loaded.meta.encrypted {
-            kv(ui, "Шифр", "ChaCha20-Poly1305", p);
+            kv(ui, &app.locale.text("cipher-label"), "ChaCha20-Poly1305", p);
         }
         if let Some((percent, data, parity)) = loaded.meta.recovery {
             kv(
                 ui,
-                "Восстановление",
+                &app.locale.text("recovery-label"),
                 &format!("{percent}% · {data}+{parity} кусков"),
                 p,
             );
@@ -671,7 +706,7 @@ fn archive_card(app: &App, ui: &mut egui::Ui, p: Palette) {
         if loaded.meta.archive_bytes > 0 {
             kv(
                 ui,
-                "Размер файла",
+                &app.locale.text("archive-size-label"),
                 &pliczip::util::human_bytes(loaded.meta.archive_bytes),
                 p,
             );
@@ -679,7 +714,7 @@ fn archive_card(app: &App, ui: &mut egui::Ui, p: Palette) {
         if index.created_at > 0 {
             kv(
                 ui,
-                "Создан",
+                &app.locale.text("created-label"),
                 &pliczip::util::format_unix_time(index.created_at),
                 p,
             );
@@ -693,9 +728,9 @@ fn selection_card(app: &App, ui: &mut egui::Ui, p: Palette) {
     let index = &loaded.meta.index;
     let Some(entry) = loaded.selected.and_then(|i| index.entries.get(i)) else {
         widgets::card(ui, p, |ui| {
-            widgets::section(ui, "ВЫБРАНО", p);
+            widgets::section(ui, &app.locale.text("selected-section"), p);
             ui.label(
-                egui::RichText::new("Выберите строку в таблице, чтобы увидеть детали.")
+                egui::RichText::new(app.locale.text("select-row-hint"))
                     .size(12.0)
                     .color(p.dim),
             );
@@ -703,7 +738,7 @@ fn selection_card(app: &App, ui: &mut egui::Ui, p: Palette) {
         return;
     };
     widgets::card(ui, p, |ui| {
-        widgets::section(ui, "ВЫБРАНО", p);
+        widgets::section(ui, &app.locale.text("selected-section"), p);
         ui.horizontal(|ui| {
             let icon = entry_icon(entry.kind);
             widgets::icon(ui, icon, 18.0, entry_color(entry.kind, p));
@@ -721,28 +756,43 @@ fn selection_card(app: &App, ui: &mut egui::Ui, p: Palette) {
         );
         ui.add_space(2.0);
         match entry.kind {
-            Kind::Dir => kv(ui, "Тип", "папка", p),
+            Kind::Dir => kv(ui, "Тип", &app.locale.text("folder-type"), p),
             Kind::Symlink => {
-                kv(ui, "Тип", "ссылка", p);
-                kv(ui, "Цель", &entry.link, p);
+                kv(ui, "Тип", &app.locale.text("link-type"), p);
+                kv(ui, &app.locale.text("target-label"), &entry.link, p);
             }
             _ => {
-                kv(ui, "Размер", &pliczip::util::human_bytes(entry.size), p);
+                kv(
+                    ui,
+                    &app.locale.text("size-label"),
+                    &pliczip::util::human_bytes(entry.size),
+                    p,
+                );
                 if let Some(packed) = packed_size(index, entry) {
-                    kv(ui, "В архиве", &pliczip::util::human_bytes(packed), p);
+                    kv(
+                        ui,
+                        &app.locale.text("in-archive"),
+                        &pliczip::util::human_bytes(packed),
+                        p,
+                    );
                 }
                 if let Some(f) = saved_fraction(index, entry) {
-                    kv(ui, "Экономия", &format!("{:.1}%", f * 100.0), p);
+                    kv(
+                        ui,
+                        &app.locale.text("savings-label"),
+                        &format!("{:.1}%", f * 100.0),
+                        p,
+                    );
                 }
                 if let Some(b) = entry.block.and_then(|b| index.blocks.get(b as usize)) {
-                    kv(ui, "Метод", b.method.name(), p);
+                    kv(ui, &app.locale.text("method-label"), b.method.name(), p);
                 }
             }
         }
         if entry.mtime > 0 {
             kv(
                 ui,
-                "Изменён",
+                &app.locale.text("modified-label"),
                 &pliczip::util::format_unix_time(entry.mtime),
                 p,
             );
@@ -922,6 +972,7 @@ fn table(app: &mut App, ui: &mut egui::Ui, p: Palette) {
     let index = &loaded.meta.index;
     let rows = loaded.view.len();
     let mut clicked: Option<usize> = None;
+    let mut toggle_dir: Option<String> = None;
 
     if rows == 0 {
         ui.add_space(40.0);
@@ -977,6 +1028,26 @@ fn table(app: &mut App, ui: &mut egui::Ui, p: Palette) {
                 // Имя: в дереве — отступ и только имя, в плоском списке — путь.
                 let depth = entry.path.matches('/').count() as f32;
                 let mut x = name_rect.left() + if flat { 0.0 } else { depth * 18.0 };
+                if !flat && entry.kind == Kind::Dir {
+                    let expanded = loaded.expanded.contains(&entry.path);
+                    let arrow_rect = Rect::from_center_size(pos2(x + 5.0, cy), vec2(14.0, ROW_H));
+                    let arrow = ui.interact(
+                        arrow_rect,
+                        ui.scope_id().with(("folder", &entry.path)),
+                        Sense::click(),
+                    );
+                    painter.text(
+                        pos2(x + 5.0, cy),
+                        Align2::CENTER_CENTER,
+                        if expanded { "▾" } else { "▸" },
+                        FontId::proportional(13.0),
+                        if arrow.hovered() { p.accent } else { p.dim },
+                    );
+                    if arrow.clicked() {
+                        toggle_dir = Some(entry.path.clone());
+                    }
+                    x += 14.0;
+                }
                 let icon_rect = Rect::from_center_size(pos2(x + 8.0, cy), vec2(16.0, 16.0));
                 let row_bg = bg.unwrap_or(p.panel);
                 widgets::paint_icon(
@@ -1097,6 +1168,9 @@ fn table(app: &mut App, ui: &mut egui::Ui, p: Palette) {
             Some(i)
         };
     }
+    if let Some(path) = toggle_dir {
+        loaded.toggle_dir(&path);
+    }
 }
 
 /// Пустое состояние: зона перетаскивания и быстрые действия.
@@ -1153,24 +1227,32 @@ fn empty_state(app: &mut App, ui: &mut egui::Ui, p: Palette, busy: bool) {
             .color(p.text),
     );
     ui.add_space(2.0);
-    ui.label(
-        egui::RichText::new(
-            "Перетащите сюда архив .plz, чтобы открыть, или файлы — чтобы упаковать",
-        )
-        .color(p.muted),
-    );
+    ui.label(egui::RichText::new(app.locale.text("drop-open")).color(p.muted));
     ui.add_space(18.0);
     let buttons_w = 300.0;
     ui.allocate_ui_with_layout(
         vec2(buttons_w, 34.0),
         Layout::left_to_right(Align::Center),
         |ui| {
-            if widgets::button(ui, Some(Icon::Folder), "Открыть архив", Btn::Primary, !busy)
-                .clicked()
+            if widgets::button(
+                ui,
+                Some(Icon::Folder),
+                &app.locale.text("open-archive-button"),
+                Btn::Primary,
+                !busy,
+            )
+            .clicked()
             {
                 app.pick_and_open();
             }
-            if widgets::button(ui, Some(Icon::Plus), "Создать архив", Btn::Normal, !busy).clicked()
+            if widgets::button(
+                ui,
+                Some(Icon::Plus),
+                &app.locale.text("create-archive-button"),
+                Btn::Normal,
+                !busy,
+            )
+            .clicked()
             {
                 app.modal = Modal::Create(CreateDlg::from_sources(Vec::new()));
             }
@@ -1178,16 +1260,14 @@ fn empty_state(app: &mut App, ui: &mut egui::Ui, p: Palette, busy: bool) {
     );
     ui.add_space(16.0);
     ui.label(
-        egui::RichText::new(
-            "BLAKE3 на каждый файл · шифрование ChaCha20-Poly1305 · многотомные архивы",
-        )
-        .size(11.5)
-        .color(p.dim),
+        egui::RichText::new(app.locale.text("drop-features"))
+            .size(11.5)
+            .color(p.dim),
     );
 }
 
 /// Оверлей при перетаскивании файлов над окном.
-pub fn drop_overlay(ctx: &egui::Context, p: Palette) {
+pub fn drop_overlay(ctx: &egui::Context, p: Palette, locale: &Locale) {
     let (hovering, plz) = ctx.input(|i| {
         let files = &i.raw.hovered_files;
         let plz = files
@@ -1224,9 +1304,9 @@ pub fn drop_overlay(ctx: &egui::Context, p: Palette) {
         fill,
     );
     let title = if plz {
-        "Отпустите, чтобы открыть архив"
+        locale.text("drop-open-release")
     } else {
-        "Отпустите, чтобы упаковать"
+        locale.text("drop-create-release")
     };
     painter.text(
         c + vec2(0.0, 22.0),
@@ -1236,9 +1316,9 @@ pub fn drop_overlay(ctx: &egui::Context, p: Palette) {
         p.text.gamma_multiply(t),
     );
     let sub = if plz {
-        "архив .plz откроется в окне"
+        locale.text("drop-open-hint")
     } else {
-        "откроется диалог создания архива"
+        locale.text("drop-create-hint")
     };
     painter.text(
         c + vec2(0.0, 50.0),
@@ -1330,7 +1410,7 @@ pub fn status_bar(app: &mut App, ui: &mut egui::Ui) {
                 } else {
                     let (r, _) = ui.allocate_exact_size(vec2(8.0, 8.0), Sense::hover());
                     ui.painter().circle_filled(r.center(), 3.5, p.dim);
-                    ui.label(egui::RichText::new("Готово").color(p.dim));
+                    ui.label(egui::RichText::new(app.locale.text("status-done")).color(p.dim));
                 }
 
                 if let Some(loaded) = &app.loaded {

@@ -35,6 +35,22 @@ pub enum Language {
     English,
 }
 
+impl Language {
+    pub const ALL: [Language; 2] = [Language::Russian, Language::English];
+
+    pub fn flag(self) -> &'static str {
+        match self {
+            Language::Russian => "🇷🇺",
+            Language::English => "🇬🇧",
+        }
+    }
+
+    pub fn completion(self) -> u8 {
+        // Встроенные SOML-файлы синхронизированы по ключам.
+        100
+    }
+}
+
 /// Настройки приложения.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
