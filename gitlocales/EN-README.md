@@ -390,3 +390,7 @@ The fuzz target uses nightly Rust: `rustup toolchain install nightly && RUSTUP_T
 ## v1.26.100
 
 Added accent selection, file context menus (rename, delete, select), empty-space actions (create file, sorting), and read-only TAR support. Archive creation remains `.plz`-only; ZIP, 7z, RAR and TAR can be read, tested and extracted.
+
+## Windows installer
+
+Releases include `PlicZip-Setup-vX.Y.Z.exe`. It installs the GUI `PlicZip.exe` and CLI `pliczip-cli.exe` for the current user without administrator rights, registers `.plz`, and adds Explorer actions for `.plz`, `.zip`, `.7z`, `.rar`, and `.tar`. The portable ZIP remains available separately, and user settings are preserved during upgrades.

@@ -331,3 +331,7 @@ ar.extract(&ExtractOptions { output: dir, ..Default::default() })?;
 ## v1.26.100
 
 新增：界面强调色选择、文件右键菜单（重命名、删除、选择）、空白区域操作（创建文件、排序）以及只读 TAR 支持。归档创建仍然只使用 `.plz`；ZIP、7z、RAR 和 TAR 支持读取、校验与解压。
+
+## Windows 安装程序
+
+发布版本将包含 `PlicZip-Setup-vX.Y.Z.exe`。它会在无需管理员权限的情况下为当前用户安装 GUI `PlicZip.exe` 和 CLI `pliczip-cli.exe`，注册 `.plz`，并为 `.plz`、`.zip`、`.7z`、`.rar` 和 `.tar` 添加资源管理器操作。Portable ZIP 仍单独提供，更新时会保留用户设置。

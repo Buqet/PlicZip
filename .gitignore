@@ -10,3 +10,6 @@ Cargo.lock.orig
 Thumbs.db
 desktop.ini
 .DS_Store
+
+/setup/PlicZip-Setup-v*.exe
+/setup/*.sha256

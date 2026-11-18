@@ -10,7 +10,7 @@ use std::path::Path;
 const ROOT: &str = r"HKCU\Software\Classes";
 
 #[cfg(windows)]
-const SUPPORTED_EXTENSIONS: [&str; 4] = [".plz", ".zip", ".7z", ".rar"];
+const SUPPORTED_EXTENSIONS: [&str; 5] = [".plz", ".zip", ".7z", ".rar", ".tar"];
 
 #[cfg(windows)]
 fn reg_add(key: &str, value: &str) -> Result<(), String> {

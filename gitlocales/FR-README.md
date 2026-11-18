@@ -344,3 +344,7 @@ Licence : MIT OR Apache-2.0.
 ## v1.26.100
 
 Nouveautés : choix de l’accent, menu contextuel des fichiers (renommer, supprimer, sélectionner), actions sur l’espace vide (créer un fichier, trier) et lecture des TAR. La création reste limitée au format `.plz` ; ZIP, 7z, RAR et TAR peuvent être lus, vérifiés et extraits.
+
+## Installeur Windows
+
+Les releases incluent `PlicZip-Setup-vX.Y.Z.exe`. Il installe l’interface `PlicZip.exe` et la CLI `pliczip-cli.exe` pour l’utilisateur courant sans droits administrateur, associe `.plz` et ajoute des actions Explorer pour `.plz`, `.zip`, `.7z`, `.rar` et `.tar`. Le ZIP portable reste disponible séparément et les réglages sont conservés lors des mises à jour.

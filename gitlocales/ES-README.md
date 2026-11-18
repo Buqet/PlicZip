@@ -122,3 +122,7 @@ Windows, ya están implementados para archivos de un solo volumen.
 ## v1.26.100
 
 Nuevo: selección de acento, menú contextual de archivos (renombrar, eliminar, seleccionar), acciones en el espacio vacío (crear archivo y ordenar) y lectura de TAR. La creación sigue siendo exclusiva de `.plz`; ZIP, 7z, RAR y TAR se pueden leer, comprobar y extraer.
+
+## Instalador de Windows
+
+Los releases incluyen `PlicZip-Setup-vX.Y.Z.exe`. Instala la GUI `PlicZip.exe` y la CLI `pliczip-cli.exe` para el usuario actual sin derechos de administrador, registra `.plz` y añade acciones del Explorador para `.plz`, `.zip`, `.7z`, `.rar` y `.tar`. El ZIP portable sigue disponible por separado y la configuración se conserva al actualizar.
