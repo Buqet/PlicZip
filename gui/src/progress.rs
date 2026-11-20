@@ -47,10 +47,6 @@ pub enum Done {
     Update {
         result: Result<pliczip::update::ReleaseInfo, String>,
     },
-    /// Скачивание и проверка Setup.
-    UpdateDownload {
-        result: Result<std::path::PathBuf, String>,
-    },
 }
 
 /// Сообщение рабочего потока.

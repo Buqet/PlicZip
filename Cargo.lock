@@ -3187,7 +3187,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sevenz-rust",
- "sha2 0.10.9",
  "tar",
  "ureq",
  "walkdir",

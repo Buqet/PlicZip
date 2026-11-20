@@ -168,8 +168,8 @@ pub fn menu_bar(app: &mut App, ui: &mut egui::Ui) {
                         .clicked()
                     {
                         ui.close();
-                        if let crate::app::UpdateState::Available { asset, .. } = &app.update {
-                            app.spawn_update_download(asset.clone());
+                        if let crate::app::UpdateState::Available { url, .. } = &app.update {
+                            ui.ctx().open_url(egui::OpenUrl::new_tab(url.clone()));
                         } else {
                             app.spawn_update_check();
                         }
@@ -288,8 +288,8 @@ pub fn toolbar(app: &mut App, ui: &mut egui::Ui, busy: bool) {
                     )
                     .clicked()
                     {
-                        if let crate::app::UpdateState::Available { asset, .. } = &app.update {
-                            app.spawn_update_download(asset.clone());
+                        if let crate::app::UpdateState::Available { url, .. } = &app.update {
+                            ui.ctx().open_url(egui::OpenUrl::new_tab(url.clone()));
                         } else {
                             app.spawn_update_check();
                         }
