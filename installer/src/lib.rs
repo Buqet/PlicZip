@@ -7,7 +7,12 @@ const EXTENSIONS: [&str; 5] = [".plz", ".zip", ".7z", ".rar", ".tar"];
 
 fn default_install_dir() -> String {
     std::env::var_os("LOCALAPPDATA")
-        .map(|root| root.join("PlicZip").to_string_lossy().into_owned())
+        .map(|root| {
+            std::path::PathBuf::from(root)
+                .join("PlicZip")
+                .to_string_lossy()
+                .into_owned()
+        })
         .unwrap_or_else(|| r"C:\Users\Public\PlicZip".to_string())
 }
 
@@ -25,10 +30,15 @@ fn register_shell(i: &mut Installer, install_dir: &str) -> Result<()> {
             .set_value(CurrentUser, &key, "MUIVerb", "Открыть в PlicZip")
             .install()?;
         i.registry()
-            .set_value(CurrentUser, &key, "Icon", &exe)
+            .set_value(CurrentUser, &key, "Icon", exe.as_str())
             .install()?;
         i.registry()
-            .set_value(CurrentUser, &format!(r"{key}\command"), "", &open_command)
+            .set_value(
+                CurrentUser,
+                &format!(r"{key}\command"),
+                "",
+                open_command.as_str(),
+            )
             .install()?;
     }
 
@@ -40,10 +50,15 @@ fn register_shell(i: &mut Installer, install_dir: &str) -> Result<()> {
             .set_value(CurrentUser, &key, "MUIVerb", "Добавить в архив PlicZip")
             .install()?;
         i.registry()
-            .set_value(CurrentUser, &key, "Icon", &exe)
+            .set_value(CurrentUser, &key, "Icon", exe.as_str())
             .install()?;
         i.registry()
-            .set_value(CurrentUser, &format!(r"{key}\command"), "", &add_command)
+            .set_value(
+                CurrentUser,
+                &format!(r"{key}\command"),
+                "",
+                add_command.as_str(),
+            )
             .install()?;
     }
     Ok(())
@@ -157,14 +172,19 @@ fn install_files(i: &mut Installer) -> Result<()> {
             )
             .install()?;
         i.registry()
-            .set_value(CurrentUser, INSTALL_KEY, "InstallLocation", &install_dir)
+            .set_value(
+                CurrentUser,
+                INSTALL_KEY,
+                "InstallLocation",
+                install_dir.as_str(),
+            )
             .install()?;
         i.registry()
             .set_value(
                 CurrentUser,
                 INSTALL_KEY,
                 "UninstallString",
-                &format!(r#""{install_dir}\uninstall.exe""#),
+                format!(r#""{install_dir}\uninstall.exe""#),
             )
             .install()?;
         register_shell(i, &install_dir)?;
