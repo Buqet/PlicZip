@@ -1,6 +1,6 @@
 [workspace]
 members = ["gui"]
-exclude = ["fuzz"]
+exclude = ["fuzz", "installer"]
 resolver = "2"
 
 [package]

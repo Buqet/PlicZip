@@ -106,11 +106,11 @@ jobs:
               > "$name/START-HERE.txt"
             asset="$name.zip"
             7z a -bd "$asset" "$name" >/dev/null
-            rm -rf installer-source
-            mkdir installer-source
-            cp "$bin/pliczip-gui$ext" installer-source/PlicZip.exe
-            cp "$bin/pliczip$ext" installer-source/pliczip-cli.exe
-            cp README.md LICENSE installer-source/
+            rm -rf installer/assets
+            mkdir -p installer/assets
+            cp "$bin/pliczip-gui$ext" installer/assets/PlicZip.exe
+            cp "$bin/pliczip$ext" installer/assets/pliczip-cli.exe
+            cp LICENSE installer/assets/LICENSE
           else
             asset="$name.tar.gz"
             tar czf "$asset" "$name"
@@ -122,17 +122,21 @@ jobs:
           fi
           echo "ASSET=$asset" >> "$GITHUB_ENV"
 
-      - name: Сборка Windows Setup.exe
+      - name: Установка InstallRS CLI
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
-          if (-not (Test-Path $iscc)) {
-            choco install innosetup --no-progress --yes
-          }
-          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          cargo install installrs --version 0.1.1 --locked
+
+      - name: Сборка Windows Setup через InstallRS
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
           $version = $env:TAG.TrimStart('v')
-          & $iscc "/DMyAppVersion=$version" "/DSourceDir=$PWD\installer-source" "/O$PWD" "$PWD\setup\PlicZip.iss"
+          $output = Join-Path $PWD "PlicZip-Setup-v$version.exe"
+          installrs build installer --target x86_64-pc-windows-msvc --output $output `
+            --metadata "file-version=$version.0" `
+            --metadata "product-version=$version.0"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $installer = "PlicZip-Setup-v$version.exe"
           if (-not (Test-Path $installer)) { throw "Installer was not created: $installer" }

@@ -48,4 +48,4 @@ $ pliczip x backup.plz -o ./восстановлено
 
 ## Windows Setup
 
-Для Windows в релизах будет доступен `PlicZip-Setup-vX.Y.Z.exe`. Установщик ставит GUI `PlicZip.exe` и CLI `pliczip-cli.exe` в профиль текущего пользователя без прав администратора, добавляет ярлык, ассоциацию `.plz` и пункты Windows Explorer для `.plz`, `.zip`, `.7z`, `.rar` и `.tar`. Portable ZIP остаётся доступным отдельно. Настройки пользователя при обновлении не удаляются.
+Для Windows в релизах будет доступен `PlicZip-Setup-vX.Y.Z.exe`, собранный через InstallRS. Установщик ставит GUI `PlicZip.exe` и CLI `pliczip-cli.exe` в профиль текущего пользователя без прав администратора, добавляет ярлык, ассоциацию `.plz` и пункты Windows Explorer для `.plz`, `.zip`, `.7z`, `.rar` и `.tar`. Portable ZIP остаётся доступным отдельно. Настройки пользователя при обновлении не удаляются.

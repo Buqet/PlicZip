@@ -1,0 +1,32 @@
+[package]
+name = "pliczip-installer"
+version = "1.26.100"
+edition = "2021"
+
+[lib]
+name = "pliczip_installer"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1"
+installrs = { version = "0.1.1", features = ["gui"] }
+
+[package.metadata.installrs]
+gui = true
+subsystem = "windows"
+execution-level = "asInvoker"
+dpi-aware = "permonitorv2"
+supported-os = ["7", "8", "8.1", "10"]
+product-name = "PlicZip"
+file-description = "PlicZip Setup"
+product-version = "1.26.100"
+file-version = "1.26.100"
+company-name = "PlicZip"
+legal-copyright = "Copyright (c) 2026 PlicZip contributors"
+
+[package.metadata.installrs.installer]
+original-filename = "PlicZip-Setup.exe"
+
+[package.metadata.installrs.uninstaller]
+file-description = "PlicZip Uninstaller"
+original-filename = "uninstall.exe"
