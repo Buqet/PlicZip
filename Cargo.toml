@@ -18,6 +18,10 @@ categories = ["command-line-utilities", "compression"]
 name = "pliczip"
 path = "src/main.rs"
 
+[[bin]]
+name = "pliczip-updater"
+path = "src/updater_main.rs"
+
 [dependencies]
 anyhow = "1"
 blake3 = { version = "1", features = ["pure"] }
@@ -33,6 +37,7 @@ rayon = "1"
 argon2 = "0.5"
 chacha20poly1305 = "0.10"
 getrandom = "0.2"
+sha2 = "0.10"
 zeroize = "1"
 rpassword = "7"
 reed-solomon-simd = "3.1"

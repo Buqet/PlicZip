@@ -13,6 +13,7 @@
 #define MyAppPublisher "PlicZip"
 #define MyAppExeName "PlicZip.exe"
 #define MyCliExeName "pliczip-cli.exe"
+#define MyUpdaterExeName "pliczip-updater.exe"
 
 [Setup]
 AppId={{B6B9E0D8-5C6B-4A4B-BF8E-3D5C4B6F1E26}
@@ -36,6 +37,7 @@ UninstallDisplayName=PlicZip
 [Files]
 Source: "{#SourceDir}\PlicZip.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\pliczip-cli.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\{#MyUpdaterExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion isreadme
 Source: "{#SourceDir}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 

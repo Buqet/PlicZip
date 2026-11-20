@@ -95,6 +95,7 @@ jobs:
             # simply open the first executable in the downloaded archive.
             cp "$bin/pliczip-gui$ext" "$name/PlicZip$ext"
             cp "$bin/pliczip$ext" "$name/pliczip-cli$ext"
+            cp "$bin/pliczip-updater$ext" "$name/pliczip-updater$ext"
             printf '%s\n' \
               'PlicZip Windows package' \
               '' \
@@ -110,6 +111,7 @@ jobs:
             mkdir installer-source
             cp "$bin/pliczip-gui$ext" installer-source/PlicZip.exe
             cp "$bin/pliczip$ext" installer-source/pliczip-cli.exe
+            cp "$bin/pliczip-updater$ext" installer-source/pliczip-updater.exe
             cp README.md LICENSE installer-source/
           else
             asset="$name.tar.gz"

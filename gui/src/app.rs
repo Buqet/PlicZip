@@ -73,7 +73,10 @@ pub enum UpdateState {
     /// Идёт запрос к GitHub Releases.
     Checking,
     /// Найдена версия новее текущей.
-    Available { latest: String, url: String },
+    Available {
+        latest: String,
+        asset: pliczip::update::ReleaseAsset,
+    },
     /// Текущая версия актуальна.
     NotFound,
     /// Проверка завершилась ошибкой.
@@ -824,6 +827,27 @@ impl App {
         });
     }
 
+    /// Скачивает Setup, проверяет SHA-256 и передаёт его отдельному updater.
+    pub fn spawn_update_download(&mut self, asset: pliczip::update::ReleaseAsset) {
+        if self.op.is_some() {
+            return;
+        }
+        let destination =
+            std::env::temp_dir().join(format!("PlicZip-Setup-{}.exe", std::process::id()));
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.rx = Some(rx);
+        self.op = Some(OpState::new(
+            self.locale.text("operation-update"),
+            asset.size,
+        ));
+        std::thread::spawn(move || {
+            let result = pliczip::update::download_verified(&asset, &destination)
+                .map(|()| destination)
+                .map_err(|err| format!("{err:#}"));
+            let _ = tx.send(Msg::Done(Box::new(Done::UpdateDownload { result })));
+        });
+    }
+
     pub fn spawn_create(&mut self, dlg: &CreateDlg) -> Result<(), String> {
         let output = PathBuf::from(dlg.output.trim());
         if output.as_os_str().is_empty() {
@@ -1082,14 +1106,64 @@ impl App {
                     let available =
                         release.latest != current && release.latest != format!("v{current}");
                     if available {
+                        let Some(asset) = release.asset else {
+                            self.update = UpdateState::Error;
+                            self.notify("Для этой версии не найден подходящий asset", false);
+                            return;
+                        };
                         self.update = UpdateState::Available {
                             latest: release.latest.clone(),
-                            url: release.url,
+                            asset,
                         };
                         self.notify(self.locale.format("update-found", &[&release.latest]), true);
                     } else {
                         self.update = UpdateState::NotFound;
                         self.notify(self.locale.format("update-current", &[&current]), true);
+                    }
+                }
+                Err(err) => {
+                    self.update = UpdateState::Error;
+                    self.modal = Modal::Error {
+                        title: self.locale.text("update-error-title"),
+                        message: err,
+                        hint: self.locale.text("update-error-hint"),
+                    };
+                }
+            },
+            Done::UpdateDownload { result } => match result {
+                Ok(setup) => {
+                    #[cfg(windows)]
+                    {
+                        let Ok(restart) = std::env::current_exe() else {
+                            self.notify("Не удалось определить путь PlicZip.exe", false);
+                            return;
+                        };
+                        let updater_source = restart.with_file_name("pliczip-updater.exe");
+                        let updater = std::env::temp_dir()
+                            .join(format!("PlicZip-Updater-{}.exe", std::process::id()));
+                        if std::fs::copy(&updater_source, &updater).is_err() {
+                            self.notify("Не найден PlicZip-Updater.exe", false);
+                            return;
+                        }
+                        let launched = std::process::Command::new(updater)
+                            .args([
+                                "--wait-pid".to_string(),
+                                std::process::id().to_string(),
+                                "--setup".to_string(),
+                                setup.to_string_lossy().into_owned(),
+                                "--restart".to_string(),
+                                restart.to_string_lossy().into_owned(),
+                            ])
+                            .spawn();
+                        if launched.is_ok() {
+                            std::process::exit(0);
+                        }
+                        self.notify("Не удалось запустить updater", false);
+                    }
+                    #[cfg(not(windows))]
+                    {
+                        let _ = setup;
+                        self.notify("Автообновление доступно только в Windows", false);
                     }
                 }
                 Err(err) => {

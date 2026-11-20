@@ -682,6 +682,7 @@ fn target_path(dest: &Path, entry: &PzEntry) -> Result<PathBuf> {
 }
 
 /// Восстанавливает время изменения и права доступа.
+#[allow(deprecated)]
 fn apply_metadata(target: &Path, entry: &PzEntry, restore_mtime: bool) {
     if restore_mtime && entry.mtime > 0 {
         let ft = filetime::FileTime::from_unix_time(entry.mtime, 0);
