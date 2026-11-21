@@ -133,6 +133,9 @@ jobs:
         shell: pwsh
         run: |
           $version = $env:TAG.TrimStart('v')
+          $manifest = Get-Content installer/Cargo.toml -Raw
+          $manifest = [regex]::Replace($manifest, '(?m)^version = "[^"]+"$', "version = `"$version`"", 1)
+          Set-Content installer/Cargo.toml $manifest -Encoding utf8
           $output = Join-Path $PWD "PlicZip-Setup-v$version.exe"
           installrs build installer --target x86_64-pc-windows-msvc --output $output `
             --metadata "file-version=$version.0" `

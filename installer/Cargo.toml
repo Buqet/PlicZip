@@ -10,6 +10,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = "1"
 installrs = { version = "0.1.1", features = ["gui"] }
+sys-locale = "0.3"
 
 [package.metadata.installrs]
 gui = true
