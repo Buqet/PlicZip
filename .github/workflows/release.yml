@@ -40,7 +40,15 @@ jobs:
           else
             flags=(--generate-notes --verify-tag --title "$TAG")
             case "$TAG" in *-*) flags+=(--prerelease) ;; esac
-            gh release create "$TAG" -R "$GITHUB_REPOSITORY" "${flags[@]}"
+            if ! gh release create "$TAG" -R "$GITHUB_REPOSITORY" "${flags[@]}"; then
+              # Release мог появиться между проверкой и create (например, при
+              # ручном создании changelog перед запуском workflow).
+              if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+                echo "Релиз $TAG появился параллельно — продолжаем загрузку assets."
+              else
+                exit 1
+              fi
+            fi
           fi
 
   build:
