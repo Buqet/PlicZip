@@ -1514,7 +1514,7 @@ pub fn operation_center(app: &mut App, ctx: &egui::Context, p: Palette) {
         .as_ref()
         .map(|op| (op.label.clone(), op.percent(), op.speed(), op.eta()));
     egui::Window::new(app.locale.text("operation-center"))
-        .id(egui::Id::new("operation_center"))
+        .id(egui::Id::unique("operation_center"))
         .anchor(Align2::RIGHT_BOTTOM, [-16.0, -42.0])
         .default_width(360.0)
         .resizable(false)
