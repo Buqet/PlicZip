@@ -63,6 +63,9 @@ pub struct Config {
     /// Язык интерфейса.
     #[serde(default)]
     pub language: Language,
+    /// Последние открытые архивы, от новых к старым.
+    #[serde(default)]
+    pub recent_archives: Vec<String>,
 }
 
 fn default_dark() -> bool {
@@ -75,6 +78,7 @@ impl Default for Config {
             accent: Accent::Brass,
             dark: true,
             language: Language::Russian,
+            recent_archives: Vec::new(),
         }
     }
 }
@@ -129,12 +133,14 @@ mod tests {
             accent: Accent::Steel,
             dark: false,
             language: Language::English,
+            recent_archives: vec!["backup.plz".into()],
         };
         let text = serde_json::to_string(&cfg).unwrap();
         let back: Config = serde_json::from_str(&text).unwrap();
         assert_eq!(back.accent, Accent::Steel);
         assert!(!back.dark);
         assert_eq!(back.language, Language::English);
+        assert_eq!(back.recent_archives, vec!["backup.plz"]);
     }
 
     #[test]
@@ -143,6 +149,7 @@ mod tests {
         assert_eq!(cfg.accent, Accent::Brass);
         assert!(cfg.dark);
         assert_eq!(cfg.language, Language::Russian);
+        assert!(cfg.recent_archives.is_empty());
     }
 
     #[test]

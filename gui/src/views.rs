@@ -1259,8 +1259,8 @@ fn table(app: &mut App, ui: &mut egui::Ui, p: Palette) {
 fn empty_state(app: &mut App, ui: &mut egui::Ui, p: Palette, busy: bool) {
     let avail = ui.available_rect_before_wrap();
     let size = vec2(
-        560.0_f32.min(avail.width() - 40.0),
-        340.0_f32.min(avail.height() - 40.0),
+        620.0_f32.min(avail.width() - 40.0),
+        500.0_f32.min(avail.height() - 40.0),
     );
     let zone = Rect::from_center_size(avail.center(), size);
     let hovering = ui.ctx().input(|i| !i.raw.hovered_files.is_empty());
@@ -1346,6 +1346,51 @@ fn empty_state(app: &mut App, ui: &mut egui::Ui, p: Palette, busy: bool) {
             .size(11.5)
             .color(p.dim),
     );
+
+    let recent = app.cfg.recent_archives.clone();
+    if !recent.is_empty() {
+        ui.add_space(18.0);
+        ui.allocate_ui_with_layout(
+            vec2(440.0, 24.0),
+            Layout::left_to_right(Align::Center),
+            |ui| {
+                ui.label(
+                    egui::RichText::new(app.locale.text("recent-title"))
+                        .strong()
+                        .color(p.text),
+                );
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui.small_button(app.locale.text("clear-recent")).clicked() {
+                        app.clear_recent();
+                    }
+                });
+            },
+        );
+        egui::ScrollArea::vertical()
+            .id_salt("recent_archives")
+            .max_height(115.0)
+            .show(ui, |ui| {
+                for value in recent {
+                    let path = std::path::PathBuf::from(&value);
+                    let name = path
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or(&value);
+                    let response = ui
+                        .add_sized(
+                            [440.0, 27.0],
+                            egui::Button::new(
+                                egui::RichText::new(format!("▸  {name}")).color(p.text),
+                            )
+                            .fill(p.panel2),
+                        )
+                        .on_hover_text(&value);
+                    if response.clicked() && !busy {
+                        app.open_recent(path);
+                    }
+                }
+            });
+    }
 }
 
 /// Оверлей при перетаскивании файлов над окном.
@@ -1459,6 +1504,131 @@ pub fn toast(app: &mut App, ctx: &egui::Context, p: Palette) {
     );
 }
 
+/// Плавающий центр операций: активный прогресс и история завершённых задач.
+pub fn operation_center(app: &mut App, ctx: &egui::Context, p: Palette) {
+    if !app.operation_center_open {
+        return;
+    }
+    let active = app
+        .op
+        .as_ref()
+        .map(|op| (op.label.clone(), op.percent(), op.speed(), op.eta()));
+    egui::Window::new(app.locale.text("operation-center"))
+        .id(egui::Id::new("operation_center"))
+        .anchor(Align2::RIGHT_BOTTOM, [-16.0, -42.0])
+        .default_width(360.0)
+        .resizable(false)
+        .collapsible(false)
+        .frame(
+            egui::Frame::new()
+                .fill(p.panel)
+                .corner_radius(12u8)
+                .stroke(Stroke::new(1.0, p.line))
+                .inner_margin(egui::Margin::same(14)),
+        )
+        .show(ctx, |ui| {
+            if let Some((label, percent, speed, eta)) = &active {
+                ui.horizontal(|ui| {
+                    ui.add(egui::Spinner::new().size(14.0).color(p.accent));
+                    ui.label(egui::RichText::new(label).strong().color(p.text));
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        ui.label(
+                            egui::RichText::new(format!("{percent:.0}%"))
+                                .color(p.accent)
+                                .monospace(),
+                        );
+                    });
+                });
+                let (bar, _) =
+                    ui.allocate_exact_size(vec2(ui.available_width(), 7.0), Sense::hover());
+                ui.painter()
+                    .rect_filled(bar, 3.5, mix(p.panel2, p.text, 0.12));
+                let mut fill = bar;
+                fill.set_width(bar.width() * (*percent / 100.0) as f32);
+                ui.painter().rect_filled(fill, 3.5, p.accent);
+                ui.add_space(5.0);
+                ui.horizontal(|ui| {
+                    if let Some(speed) = speed {
+                        ui.label(egui::RichText::new(format_speed(*speed)).color(p.muted));
+                    }
+                    if let Some(eta) = eta {
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            ui.label(egui::RichText::new(format_eta(*eta)).color(p.muted));
+                        });
+                    }
+                });
+                ui.separator();
+            }
+
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new(app.locale.text("operation-history"))
+                        .strong()
+                        .color(p.text),
+                );
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if !app.operation_history.is_empty()
+                        && ui.small_button(app.locale.text("clear-history")).clicked()
+                    {
+                        app.clear_operation_history();
+                    }
+                });
+            });
+            if app.operation_history.is_empty() {
+                ui.label(
+                    egui::RichText::new(app.locale.text("operation-history-empty")).color(p.dim),
+                );
+            } else {
+                egui::ScrollArea::vertical()
+                    .max_height(150.0)
+                    .show(ui, |ui| {
+                        for item in &app.operation_history {
+                            ui.horizontal(|ui| {
+                                let color = if item.ok { p.ok } else { p.err };
+                                let icon = if item.ok { Icon::Check } else { Icon::Cross };
+                                let (icon_rect, _) =
+                                    ui.allocate_exact_size(vec2(14.0, 14.0), Sense::hover());
+                                widgets::paint_icon(ui.painter(), icon_rect, icon, color, p.panel);
+                                ui.vertical(|ui| {
+                                    ui.label(egui::RichText::new(&item.label).color(p.text));
+                                    ui.label(
+                                        egui::RichText::new(format!(
+                                            "{} · {}",
+                                            item.detail,
+                                            format_duration(item.elapsed)
+                                        ))
+                                        .size(11.0)
+                                        .color(p.muted),
+                                    );
+                                });
+                            });
+                            ui.add_space(5.0);
+                        }
+                    });
+            }
+        });
+}
+
+fn format_speed(bytes_per_second: f64) -> String {
+    format!(
+        "{} /с",
+        pliczip::util::human_bytes(bytes_per_second.max(0.0) as u64)
+    )
+}
+
+fn format_eta(duration: std::time::Duration) -> String {
+    format!("~{}", format_duration(duration))
+}
+
+fn format_duration(duration: std::time::Duration) -> String {
+    let seconds = duration.as_secs();
+    if seconds < 60 {
+        format!("{seconds} с")
+    } else {
+        format!("{} мин", seconds / 60)
+    }
+}
+
 /// Статусбар.
 pub fn status_bar(app: &mut App, ui: &mut egui::Ui) {
     let p = crate::theme::current();
@@ -1471,20 +1641,27 @@ pub fn status_bar(app: &mut App, ui: &mut egui::Ui) {
         )
         .show(ui, |ui| {
             ui.horizontal_centered(|ui| {
-                if let Some(op) = &app.op {
+                let active = app.op.as_ref().map(|op| (op.label.clone(), op.percent()));
+                if let Some((label, percent)) = active {
                     ui.add(egui::Spinner::new().size(12.0).color(p.accent));
-                    ui.label(egui::RichText::new(format!("{}…", op.label)).color(p.accent));
+                    ui.label(egui::RichText::new(format!("{}…", label)).color(p.accent));
                     let (bar, _) = ui.allocate_exact_size(vec2(140.0, 5.0), Sense::hover());
                     ui.painter()
                         .rect_filled(bar, 2.5, mix(p.panel, p.text, 0.1));
                     let mut fill = bar;
-                    fill.set_width(bar.width() * (op.percent() / 100.0) as f32);
+                    fill.set_width(bar.width() * (percent / 100.0) as f32);
                     ui.painter().rect_filled(fill, 2.5, p.accent);
                     ui.label(
-                        egui::RichText::new(format!("{:.0}%", op.percent()))
+                        egui::RichText::new(format!("{percent:.0}%"))
                             .color(p.muted)
                             .monospace(),
                     );
+                    if ui
+                        .small_button(app.locale.text("operation-center"))
+                        .clicked()
+                    {
+                        app.operation_center_open = true;
+                    }
                 } else if let Some(text) = &app.last_action {
                     let (r, _) = ui.allocate_exact_size(vec2(8.0, 8.0), Sense::hover());
                     ui.painter().circle_filled(r.center(), 3.5, p.ok);

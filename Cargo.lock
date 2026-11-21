@@ -3168,7 +3168,7 @@ checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 
 [[package]]
 name = "pliczip"
-version = "1.26.100"
+version = "1.26.102"
 dependencies = [
  "anyhow",
  "argon2",
@@ -3196,7 +3196,7 @@ dependencies = [
 
 [[package]]
 name = "pliczip-gui"
-version = "1.26.100"
+version = "1.26.102"
 dependencies = [
  "anyhow",
  "eframe",

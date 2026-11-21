@@ -42,6 +42,26 @@ $ pliczip x backup.plz -o ./восстановлено
 
 **Лицензия:** MIT OR Apache-2.0
 
+## v1.26.102 — UX 2.0: Operation Center
+
+### Русский
+
+- Добавлен домашний экран с drag-and-drop зоной, быстрыми действиями и историей последних архивов.
+- Добавлено сохранение последних 8 успешно открытых архивов с повторным открытием одним кликом.
+- Добавлен Operation Center с живым прогрессом, процентом выполнения, скоростью и ETA.
+- Добавлена история последних завершённых операций: создание, распаковка, добавление файлов, проверка, восстановление и обновление.
+- Progress больше не блокирует основное окно модальным диалогом.
+- Обновлена локализация RU/EN и синхронизированы версии GUI, CLI и InstallRS Setup.
+
+### English
+
+- Added a Home screen with a drag-and-drop zone, quick actions, and recent archives.
+- Added persistent history for the last 8 successfully opened archives with one-click reopening.
+- Added an Operation Center with live progress, completion percentage, speed, and ETA.
+- Added recent operation history for creating, extracting, adding files, verifying, repairing, and updating.
+- Progress is no longer shown as a blocking modal window.
+- Updated RU/EN localization and synchronized GUI, CLI, and InstallRS Setup versions.
+
 ## v1.26.100
 
 Большое обновление: GUI поддерживает выбор акцента, контекстное меню файлов (переименовать, удалить, выделить), меню пустого места (создать файл и сортировка) и чтение TAR. Создание архивов по-прежнему выполняется только в формате `.plz`; ZIP, 7z, RAR и TAR доступны для чтения, проверки и распаковки.

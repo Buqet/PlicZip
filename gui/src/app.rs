@@ -4,7 +4,7 @@ use pliczip::{format, source};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Receiver;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use zeroize::Zeroizing;
 
 use crate::config::{Config, Language};
@@ -62,6 +62,14 @@ pub struct Toast {
     pub text: String,
     pub ok: bool,
     pub at: Instant,
+}
+
+/// Завершённая операция в Operation Center.
+pub struct OperationRecord {
+    pub label: String,
+    pub ok: bool,
+    pub elapsed: Duration,
+    pub detail: String,
 }
 
 /// Состояние проверки обновлений в GUI.
@@ -266,6 +274,8 @@ pub struct App {
     pub sort: Sort,
     pub sort_desc: bool,
     pub toast: Option<Toast>,
+    pub operation_history: Vec<OperationRecord>,
+    pub operation_center_open: bool,
     /// Поставить фокус в поле поиска на следующем кадре (Ctrl+F).
     pub focus_search: bool,
     /// Последний заголовок, отправленный платформенному окну.
@@ -295,6 +305,8 @@ impl App {
             sort: Sort::Path,
             sort_desc: false,
             toast: None,
+            operation_history: Vec::new(),
+            operation_center_open: false,
             focus_search: false,
             window_title: "PlicZip".into(),
             update: UpdateState::Idle,
@@ -332,6 +344,36 @@ impl App {
         self.cfg.language = language;
         self.cfg.save();
         self.locale = Locale::load(language);
+    }
+
+    /// Запоминает успешно открытый архив, сохраняя порядок от нового к старому.
+    pub fn remember_recent(&mut self, path: &Path) {
+        let value = path.to_string_lossy().into_owned();
+        self.cfg.recent_archives.retain(|item| item != &value);
+        self.cfg.recent_archives.insert(0, value);
+        self.cfg.recent_archives.truncate(8);
+        self.cfg.save();
+    }
+
+    /// Открывает архив с Home-экрана, убирая устаревшую запись из истории.
+    pub fn open_recent(&mut self, path: PathBuf) {
+        if path.exists() {
+            self.begin_open(path);
+        } else {
+            let value = path.to_string_lossy().into_owned();
+            self.cfg.recent_archives.retain(|item| item != &value);
+            self.cfg.save();
+            self.notify(self.locale.text("recent-missing"), false);
+        }
+    }
+
+    pub fn clear_recent(&mut self) {
+        self.cfg.recent_archives.clear();
+        self.cfg.save();
+    }
+
+    pub fn clear_operation_history(&mut self) {
+        self.operation_history.clear();
     }
 
     pub fn begin_open(&mut self, path: PathBuf) {
@@ -420,6 +462,8 @@ impl App {
                         .map(|entry| entry.path.clone())
                         .collect();
                 }
+                let recent_path = self.loaded.as_ref().expect("loaded archive").path.clone();
+                self.remember_recent(&recent_path);
                 self.modal = Modal::None;
                 self.last_action = None;
             }
@@ -492,6 +536,7 @@ impl App {
                         .collect(),
                     expanded_generation: 0,
                 });
+                self.remember_recent(&path);
                 self.modal = Modal::None;
                 self.last_action = Some(format!(
                     "открыт {}-архив · {} элементов",
@@ -889,9 +934,25 @@ impl App {
                     }
                 }
                 Ok(Msg::Done(done)) => {
-                    self.op = None;
+                    let active = self.op.take();
                     self.rx = None;
+                    let record = active.and_then(|op| {
+                        Self::operation_result(&done).map(|ok| OperationRecord {
+                            label: op.label,
+                            ok,
+                            elapsed: op.started.elapsed(),
+                            detail: if ok {
+                                self.locale.text("operation-completed")
+                            } else {
+                                self.locale.text("operation-failed")
+                            },
+                        })
+                    });
                     self.finish_op(*done);
+                    if let Some(record) = record {
+                        self.operation_history.insert(0, record);
+                        self.operation_history.truncate(12);
+                    }
                     return;
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => return,
@@ -1104,6 +1165,18 @@ impl App {
         }
     }
 
+    fn operation_result(done: &Done) -> Option<bool> {
+        match done {
+            Done::Extract { stats } => Some(stats.is_ok()),
+            Done::Test { report } => Some(report.is_ok()),
+            Done::Repair { report } => Some(report.is_ok()),
+            // Диагностика — промежуточный этап мастера recovery, а не отдельная история.
+            Done::RecoveryScan { .. } => None,
+            Done::Create { stats, .. } => Some(stats.is_ok()),
+            Done::Update { result } => Some(result.is_ok()),
+        }
+    }
+
     pub fn handle_dnd(&mut self, ctx: &egui::Context) {
         let dropped: Vec<PathBuf> = ctx.input(|i| {
             i.raw
@@ -1169,6 +1242,7 @@ impl eframe::App for App {
         views::menu_bar(self, ui);
         views::toolbar(self, ui, busy);
         views::status_bar(self, ui);
+        views::operation_center(self, &ctx, p);
         if self.loaded.is_some() {
             views::archive_header(self, ui, p);
             views::side_panel(self, ui, p);

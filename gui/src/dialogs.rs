@@ -50,8 +50,7 @@ fn dialog(
 
 /// Рисует текущее модальное окно.
 pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
-    if let Some(op) = &app.op {
-        progress_window(ctx, op, p);
+    if app.op.is_some() {
         return;
     }
     let escape = ctx.input(|i| i.key_pressed(egui::Key::Escape));
