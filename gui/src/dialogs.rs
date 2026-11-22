@@ -1,6 +1,6 @@
 //! Модальные окна: создание, распаковка, пароль, ошибка, прогресс.
 
-use eframe::egui::{self, vec2, Align, Align2, Color32, FontId, Layout, Sense, Stroke};
+use eframe::egui::{self, vec2, Align, Color32, Layout, Sense, Stroke};
 
 use crate::app::{App, CreateDlg, ExtractDlg, Modal, ModalKind, PwDlg};
 use crate::config::{Accent, Language};
