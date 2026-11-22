@@ -639,7 +639,9 @@ fn add_requires_inputs_before_password_prompt() {
     let _ = fs::remove_dir_all(&dir);
 }
 
-#[cfg(unix)]
+// macOS APIs/filesystems reject non-UTF-8 filenames with EILSEQ; this checks
+// preservation on Unix platforms that can actually create such filesystem paths.
+#[cfg(all(unix, not(target_os = "macos")))]
 #[test]
 fn parser_preserves_non_utf8_filesystem_paths() {
     use std::os::unix::ffi::OsStrExt;
