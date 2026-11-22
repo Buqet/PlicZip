@@ -372,6 +372,23 @@ impl App {
         self.cfg.save();
     }
 
+    pub fn remove_recent(&mut self, path: &Path) {
+        let value = path.to_string_lossy().into_owned();
+        self.cfg.recent_archives.retain(|item| item != &value);
+        self.cfg.save();
+    }
+
+    pub fn copy_path_to_clipboard(&mut self, ctx: &egui::Context, path: &Path) {
+        ctx.copy_text(path.to_string_lossy().into_owned());
+        self.notify(self.locale.text("path-copied"), true);
+    }
+
+    pub fn open_recent_location(&mut self, ctx: &egui::Context, path: &Path) {
+        let target = path.parent().unwrap_or(path);
+        let url = format!("file://{}", target.to_string_lossy().replace(' ', "%20"));
+        ctx.open_url(egui::OpenUrl::new_tab(url));
+    }
+
     pub fn clear_operation_history(&mut self) {
         self.operation_history.clear();
     }
@@ -937,19 +954,20 @@ impl App {
                     let active = self.op.take();
                     self.rx = None;
                     let record = active.and_then(|op| {
-                        Self::operation_result(&done).map(|ok| OperationRecord {
-                            label: op.label,
-                            ok,
-                            elapsed: op.started.elapsed(),
-                            detail: if ok {
-                                self.locale.text("operation-completed")
-                            } else {
-                                self.locale.text("operation-failed")
-                            },
+                        Self::operation_outcome(&done, &self.locale).map(|(ok, detail)| {
+                            OperationRecord {
+                                label: op.label,
+                                ok,
+                                elapsed: op.started.elapsed(),
+                                detail,
+                            }
                         })
                     });
                     self.finish_op(*done);
                     if let Some(record) = record {
+                        if !record.ok {
+                            self.operation_center_open = true;
+                        }
                         self.operation_history.insert(0, record);
                         self.operation_history.truncate(12);
                     }
@@ -1013,12 +1031,32 @@ impl App {
     /// Горячие клавиши главного окна.
     fn shortcuts(&mut self, ctx: &egui::Context) {
         use egui::{Key, KeyboardShortcut, Modifiers};
-        if self.modal_kind() != ModalKind::None || self.op.is_some() {
-            return;
-        }
         let pressed = |key| {
             ctx.input_mut(|i| i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, key)))
         };
+        let shifted = |key| {
+            ctx.input_mut(|i| {
+                i.consume_shortcut(&KeyboardShortcut::new(
+                    Modifiers::COMMAND | Modifiers::SHIFT,
+                    key,
+                ))
+            })
+        };
+        if shifted(Key::O) {
+            self.operation_center_open = !self.operation_center_open;
+            return;
+        }
+        if shifted(Key::C) && self.modal_kind() == ModalKind::None && self.op.is_none() {
+            self.clear_operation_history();
+            return;
+        }
+        if ctx.input(|i| i.key_pressed(Key::Escape)) && self.modal_kind() == ModalKind::None {
+            self.operation_center_open = false;
+            return;
+        }
+        if self.modal_kind() != ModalKind::None || self.op.is_some() {
+            return;
+        }
         if pressed(Key::O) {
             self.pick_and_open();
         } else if pressed(Key::N) {
@@ -1165,15 +1203,15 @@ impl App {
         }
     }
 
-    fn operation_result(done: &Done) -> Option<bool> {
+    fn operation_outcome(done: &Done, locale: &Locale) -> Option<(bool, String)> {
         match done {
-            Done::Extract { stats } => Some(stats.is_ok()),
-            Done::Test { report } => Some(report.is_ok()),
-            Done::Repair { report } => Some(report.is_ok()),
+            Done::Extract { stats } => result_outcome(stats, locale),
+            Done::Test { report } => result_outcome(report, locale),
+            Done::Repair { report } => result_outcome(report, locale),
             // Диагностика — промежуточный этап мастера recovery, а не отдельная история.
             Done::RecoveryScan { .. } => None,
-            Done::Create { stats, .. } => Some(stats.is_ok()),
-            Done::Update { result } => Some(result.is_ok()),
+            Done::Create { stats, .. } => result_outcome(stats, locale),
+            Done::Update { result } => result_outcome(result, locale),
         }
     }
 
@@ -1202,6 +1240,16 @@ impl App {
                 self.modal = Modal::Create(CreateDlg::from_sources(dropped));
             }
         }
+    }
+}
+
+fn result_outcome<T>(result: &Result<T, String>, locale: &Locale) -> Option<(bool, String)> {
+    match result {
+        Ok(_) => Some((true, locale.text("operation-completed"))),
+        Err(error) => Some((
+            false,
+            format!("{}: {error}", locale.text("operation-failed")),
+        )),
     }
 }
 

@@ -1376,18 +1376,42 @@ fn empty_state(app: &mut App, ui: &mut egui::Ui, p: Palette, busy: bool) {
                         .file_name()
                         .and_then(|name| name.to_str())
                         .unwrap_or(&value);
-                    let response = ui
-                        .add_sized(
-                            [440.0, 27.0],
-                            egui::Button::new(
-                                egui::RichText::new(format!("▸  {name}")).color(p.text),
+                    ui.horizontal(|ui| {
+                        let response = ui
+                            .add_sized(
+                                [330.0, 27.0],
+                                egui::Button::new(
+                                    egui::RichText::new(format!("▸  {name}")).color(p.text),
+                                )
+                                .fill(p.panel2),
                             )
-                            .fill(p.panel2),
-                        )
-                        .on_hover_text(&value);
-                    if response.clicked() && !busy {
-                        app.open_recent(path);
-                    }
+                            .on_hover_text(&value);
+                        if response.clicked() && !busy {
+                            app.open_recent(path.clone());
+                        }
+                        let ctx = ui.ctx().clone();
+                        if ui
+                            .small_button(app.locale.text("copy-path"))
+                            .on_hover_text(app.locale.text("copy-path-hint"))
+                            .clicked()
+                        {
+                            app.copy_path_to_clipboard(&ctx, &path);
+                        }
+                        if ui
+                            .small_button(app.locale.text("open-location"))
+                            .on_hover_text(app.locale.text("open-location-hint"))
+                            .clicked()
+                        {
+                            app.open_recent_location(&ctx, &path);
+                        }
+                        if ui
+                            .small_button(app.locale.text("remove-recent"))
+                            .on_hover_text(app.locale.text("remove-recent-hint"))
+                            .clicked()
+                        {
+                            app.remove_recent(&path);
+                        }
+                    });
                 }
             });
     }
@@ -1527,6 +1551,19 @@ pub fn operation_center(app: &mut App, ctx: &egui::Context, p: Palette) {
                 .inner_margin(egui::Margin::same(14)),
         )
         .show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new(app.locale.text("operation-center"))
+                        .strong()
+                        .color(p.text),
+                );
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui.small_button(app.locale.text("close")).clicked() {
+                        app.operation_center_open = false;
+                    }
+                });
+            });
+            ui.separator();
             if let Some((label, percent, speed, eta)) = &active {
                 ui.horizontal(|ui| {
                     ui.add(egui::Spinner::new().size(14.0).color(p.accent));
@@ -1549,11 +1586,15 @@ pub fn operation_center(app: &mut App, ctx: &egui::Context, p: Palette) {
                 ui.add_space(5.0);
                 ui.horizontal(|ui| {
                     if let Some(speed) = speed {
-                        ui.label(egui::RichText::new(format_speed(*speed)).color(p.muted));
+                        ui.label(
+                            egui::RichText::new(format_speed(&app.locale, *speed)).color(p.muted),
+                        );
                     }
                     if let Some(eta) = eta {
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            ui.label(egui::RichText::new(format_eta(*eta)).color(p.muted));
+                            ui.label(
+                                egui::RichText::new(format_eta(&app.locale, *eta)).color(p.muted),
+                            );
                         });
                     }
                 });
@@ -1595,7 +1636,7 @@ pub fn operation_center(app: &mut App, ctx: &egui::Context, p: Palette) {
                                         egui::RichText::new(format!(
                                             "{} · {}",
                                             item.detail,
-                                            format_duration(item.elapsed)
+                                            format_duration(&app.locale, item.elapsed)
                                         ))
                                         .size(11.0)
                                         .color(p.muted),
@@ -1609,23 +1650,23 @@ pub fn operation_center(app: &mut App, ctx: &egui::Context, p: Palette) {
         });
 }
 
-fn format_speed(bytes_per_second: f64) -> String {
-    format!(
-        "{} /с",
-        pliczip::util::human_bytes(bytes_per_second.max(0.0) as u64)
-    )
+fn format_speed(locale: &Locale, bytes_per_second: f64) -> String {
+    let speed = pliczip::util::human_bytes(bytes_per_second.max(0.0) as u64);
+    locale.format("operation-speed", &[&speed])
 }
 
-fn format_eta(duration: std::time::Duration) -> String {
-    format!("~{}", format_duration(duration))
+fn format_eta(locale: &Locale, duration: std::time::Duration) -> String {
+    locale.format("operation-eta", &[&format_duration(locale, duration)])
 }
 
-fn format_duration(duration: std::time::Duration) -> String {
+fn format_duration(locale: &Locale, duration: std::time::Duration) -> String {
     let seconds = duration.as_secs();
     if seconds < 60 {
-        format!("{seconds} с")
+        let value = seconds.to_string();
+        locale.format("operation-seconds", &[&value])
     } else {
-        format!("{} мин", seconds / 60)
+        let value = (seconds / 60).to_string();
+        locale.format("operation-minutes", &[&value])
     }
 }
 
