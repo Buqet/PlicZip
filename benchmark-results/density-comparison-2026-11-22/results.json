@@ -1,0 +1,316 @@
+{
+  "meta": {
+    "binary": "/home/ubuntu/PlicZip/target/release/pliczip",
+    "binary_version": "pliczip 1.26.103",
+    "repetitions": 3,
+    "algorithms": [
+      "store",
+      "deflate-4",
+      "brotli-5",
+      "brotli-11",
+      "density"
+    ],
+    "datasets": {
+      "source-tree": {
+        "raw_bytes": 949769,
+        "sha256_tree": "7e29561645695bbe69b8f54fc798e4102a695eb5e4b8ad4736425ca568704ba0"
+      },
+      "release-binary": {
+        "raw_bytes": 8245136,
+        "sha256_tree": "9419cbf2e7ce84be7c07f35c5dd397ff631b96579fff3ee2aa3c4d7e18ca4364"
+      }
+    }
+  },
+  "rows": [
+    {
+      "dataset": "source-tree",
+      "algorithm": "store",
+      "raw_bytes": 949769,
+      "archive_bytes": 968845,
+      "archive_bytes_all": [
+        968845,
+        968845,
+        968845
+      ],
+      "ratio_percent": 102.00848837980602,
+      "saved_percent": -2.0084883798060282,
+      "pack_seconds_avg": 0.006887238999600716,
+      "pack_seconds_min": 0.0064741249989310745,
+      "unpack_seconds_avg": 0.013597645666474515,
+      "unpack_seconds_min": 0.011273141999481595,
+      "pack_mib_s": 131.5142834264005,
+      "unpack_mib_s": 66.61228892381399,
+      "pack_seconds_all": [
+        0.00695055100004538,
+        0.007237040999825695,
+        0.0064741249989310745
+      ],
+      "unpack_seconds_all": [
+        0.011273141999481595,
+        0.01709317000131705,
+        0.012426624998624902
+      ]
+    },
+    {
+      "dataset": "source-tree",
+      "algorithm": "deflate-4",
+      "raw_bytes": 949769,
+      "archive_bytes": 317490,
+      "archive_bytes_all": [
+        317490,
+        317490,
+        317490
+      ],
+      "ratio_percent": 33.428128313305656,
+      "saved_percent": 66.57187168669434,
+      "pack_seconds_avg": 0.012501899999430558,
+      "pack_seconds_min": 0.012076658000296447,
+      "unpack_seconds_avg": 0.012950160999632013,
+      "unpack_seconds_min": 0.01052604999858886,
+      "pack_mib_s": 72.45061165583664,
+      "unpack_mib_s": 69.94278309316661,
+      "pack_seconds_all": [
+        0.012462720998883015,
+        0.012076658000296447,
+        0.012966320999112213
+      ],
+      "unpack_seconds_all": [
+        0.01052604999858886,
+        0.01738973999999871,
+        0.01093469300030847
+      ]
+    },
+    {
+      "dataset": "source-tree",
+      "algorithm": "brotli-5",
+      "raw_bytes": 949769,
+      "archive_bytes": 301471,
+      "archive_bytes_all": [
+        301471,
+        301471,
+        301471
+      ],
+      "ratio_percent": 31.741507671865477,
+      "saved_percent": 68.25849232813452,
+      "pack_seconds_avg": 0.019725376333250704,
+      "pack_seconds_min": 0.01820512999984203,
+      "unpack_seconds_avg": 0.021297623333036125,
+      "unpack_seconds_min": 0.01690331600002537,
+      "pack_mib_s": 45.91903781789995,
+      "unpack_mib_s": 42.529172746418546,
+      "pack_seconds_all": [
+        0.01820512999984203,
+        0.021551423998971586,
+        0.019419575000938494
+      ],
+      "unpack_seconds_all": [
+        0.01873483499912254,
+        0.01690331600002537,
+        0.02825471899996046
+      ]
+    },
+    {
+      "dataset": "source-tree",
+      "algorithm": "brotli-11",
+      "raw_bytes": 949769,
+      "archive_bytes": 277689,
+      "archive_bytes_all": [
+        277689,
+        277689,
+        277689
+      ],
+      "ratio_percent": 29.237530388968263,
+      "saved_percent": 70.76246961103175,
+      "pack_seconds_avg": 0.5058740069998748,
+      "pack_seconds_min": 0.4807891689997632,
+      "unpack_seconds_avg": 0.023436232333551743,
+      "unpack_seconds_min": 0.01951586700124608,
+      "pack_mib_s": 1.7905057174030128,
+      "unpack_mib_s": 38.64828991826174,
+      "pack_seconds_all": [
+        0.5120360199998686,
+        0.5247968319999927,
+        0.4807891689997632
+      ],
+      "unpack_seconds_all": [
+        0.023221303999889642,
+        0.02757152599951951,
+        0.01951586700124608
+      ]
+    },
+    {
+      "dataset": "source-tree",
+      "algorithm": "density",
+      "raw_bytes": 949769,
+      "archive_bytes": 650503,
+      "archive_bytes_all": [
+        650503,
+        650503,
+        650503
+      ],
+      "ratio_percent": 68.49065404324631,
+      "saved_percent": 31.509345956753698,
+      "pack_seconds_avg": 0.0872570456667745,
+      "pack_seconds_min": 0.08287343600022723,
+      "unpack_seconds_avg": 0.014699113667423566,
+      "unpack_seconds_min": 0.012672584000029019,
+      "pack_mib_s": 10.380483259516822,
+      "unpack_mib_s": 61.6207427408519,
+      "pack_seconds_all": [
+        0.09034592799980601,
+        0.08855177300029027,
+        0.08287343600022723
+      ],
+      "unpack_seconds_all": [
+        0.01682702700054506,
+        0.014597730001696618,
+        0.012672584000029019
+      ]
+    },
+    {
+      "dataset": "release-binary",
+      "algorithm": "store",
+      "raw_bytes": 8245136,
+      "archive_bytes": 8245687,
+      "archive_bytes_all": [
+        8245687,
+        8245687,
+        8245687
+      ],
+      "ratio_percent": 100.00668272785313,
+      "saved_percent": -0.006682727853135617,
+      "pack_seconds_avg": 0.02434029233275699,
+      "pack_seconds_min": 0.021941652999885264,
+      "unpack_seconds_avg": 0.008688956000090306,
+      "unpack_seconds_min": 0.008195551001335843,
+      "pack_mib_s": 323.05176663364716,
+      "unpack_mib_s": 904.9619354033832,
+      "pack_seconds_all": [
+        0.02594764999957988,
+        0.025131573998805834,
+        0.021941652999885264
+      ],
+      "unpack_seconds_all": [
+        0.009545332999550737,
+        0.008325983999384334,
+        0.008195551001335843
+      ]
+    },
+    {
+      "dataset": "release-binary",
+      "algorithm": "deflate-4",
+      "raw_bytes": 8245136,
+      "archive_bytes": 3835601,
+      "archive_bytes_all": [
+        3835601,
+        3835601,
+        3835601
+      ],
+      "ratio_percent": 46.51956013824393,
+      "saved_percent": 53.48043986175607,
+      "pack_seconds_avg": 0.10698727599992708,
+      "pack_seconds_min": 0.10457408199908969,
+      "unpack_seconds_avg": 0.02790734933356968,
+      "unpack_seconds_min": 0.02709521299948392,
+      "pack_mib_s": 73.49635145848485,
+      "unpack_mib_s": 281.7599889007721,
+      "pack_seconds_all": [
+        0.10637085300004401,
+        0.10457408199908969,
+        0.11001689300064754
+      ],
+      "unpack_seconds_all": [
+        0.02758399000049394,
+        0.02709521299948392,
+        0.029042845000731177
+      ]
+    },
+    {
+      "dataset": "release-binary",
+      "algorithm": "brotli-5",
+      "raw_bytes": 8245136,
+      "archive_bytes": 3324066,
+      "archive_bytes_all": [
+        3324066,
+        3324066,
+        3324066
+      ],
+      "ratio_percent": 40.31547811946341,
+      "saved_percent": 59.68452188053659,
+      "pack_seconds_avg": 0.2820485839996157,
+      "pack_seconds_min": 0.26809853299891984,
+      "unpack_seconds_avg": 0.04647685866621032,
+      "unpack_seconds_min": 0.04442373299934843,
+      "pack_mib_s": 27.878794238113517,
+      "unpack_mib_s": 169.18472255082204,
+      "pack_seconds_all": [
+        0.26809853299891984,
+        0.2724107449994335,
+        0.30563647400049376
+      ],
+      "unpack_seconds_all": [
+        0.05002169299950765,
+        0.04442373299934843,
+        0.044985149999774876
+      ]
+    },
+    {
+      "dataset": "release-binary",
+      "algorithm": "brotli-11",
+      "raw_bytes": 8245136,
+      "archive_bytes": 2792905,
+      "archive_bytes_all": [
+        2792905,
+        2792905,
+        2792905
+      ],
+      "ratio_percent": 33.87336485413946,
+      "saved_percent": 66.12663514586055,
+      "pack_seconds_avg": 10.871544657332683,
+      "pack_seconds_min": 10.843218313999387,
+      "unpack_seconds_avg": 0.04830819833296118,
+      "unpack_seconds_min": 0.04142405199854693,
+      "pack_mib_s": 0.7232803328617132,
+      "unpack_mib_s": 162.77101423406714,
+      "pack_seconds_all": [
+        10.843218313999387,
+        10.888781522999125,
+        10.882634134999535
+      ],
+      "unpack_seconds_all": [
+        0.045666496000194456,
+        0.04142405199854693,
+        0.057834047000142164
+      ]
+    },
+    {
+      "dataset": "release-binary",
+      "algorithm": "density",
+      "raw_bytes": 8245136,
+      "archive_bytes": 5443587,
+      "archive_bytes_all": [
+        5443587,
+        5443587,
+        5443587
+      ],
+      "ratio_percent": 66.02179757859665,
+      "saved_percent": 33.97820242140336,
+      "pack_seconds_avg": 0.04519192733338665,
+      "pack_seconds_min": 0.0404516060007154,
+      "unpack_seconds_avg": 0.03322606266616882,
+      "unpack_seconds_min": 0.029642633000548813,
+      "pack_mib_s": 173.9951115708988,
+      "unpack_mib_s": 236.65682321375206,
+      "pack_seconds_all": [
+        0.0404516060007154,
+        0.05267446799916797,
+        0.04244970800027659
+      ],
+      "unpack_seconds_all": [
+        0.03372622499955469,
+        0.03630932999840297,
+        0.029642633000548813
+      ]
+    }
+  ]
+}

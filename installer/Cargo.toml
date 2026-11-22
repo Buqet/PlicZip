@@ -1,6 +1,6 @@
 [package]
 name = "pliczip-installer"
-version = "1.26.103"
+version = "1.26.104"
 edition = "2021"
 
 [lib]
@@ -20,8 +20,8 @@ dpi-aware = "permonitorv2"
 supported-os = ["7", "8", "8.1", "10"]
 product-name = "PlicZip"
 file-description = "PlicZip Setup"
-product-version = "1.26.103"
-file-version = "1.26.103"
+product-version = "1.26.104"
+file-version = "1.26.104"
 company-name = "PlicZip"
 legal-copyright = "Copyright (c) 2026 PlicZip contributors"
 
