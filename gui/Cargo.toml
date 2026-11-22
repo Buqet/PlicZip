@@ -1,6 +1,6 @@
 [package]
 name = "pliczip-gui"
-version = "1.26.104"
+version = "1.26.105"
 edition = "2021"
 rust-version = "1.85"
 description = "Графическая оболочка PlicZip на egui"
@@ -10,6 +10,7 @@ publish = false
 [dependencies]
 pliczip = { path = ".." }
 eframe = "0.37"
+egui_extras = { version = "0.37", features = ["svg"] }
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -8,7 +8,6 @@ use eframe::egui::{
 use pliczip::prelude::*;
 
 use crate::app::{packed_size, plural_ru, saved_fraction, App, CreateDlg, Integrity, Modal, Sort};
-use crate::config::Accent;
 use crate::locale::Locale;
 use crate::theme::Palette;
 use crate::widgets::{self, mix, Icon, Kind as Btn};
@@ -111,34 +110,6 @@ pub fn menu_bar(app: &mut App, ui: &mut egui::Ui) {
                 });
 
                 egui::menu::MenuButton::new(&app.locale.menu_view).ui(ui, |ui| {
-                    egui::menu::MenuButton::new(app.locale.text("theme")).ui(ui, |ui| {
-                        if ui
-                            .selectable_label(app.cfg.dark, app.locale.text("dark"))
-                            .clicked()
-                        {
-                            app.cfg.dark = true;
-                            app.cfg.save();
-                        }
-                        if ui
-                            .selectable_label(!app.cfg.dark, app.locale.text("light"))
-                            .clicked()
-                        {
-                            app.cfg.dark = false;
-                            app.cfg.save();
-                        }
-                    });
-                    egui::menu::MenuButton::new(app.locale.text("accent")).ui(ui, |ui| {
-                        for accent in Accent::ALL {
-                            if ui
-                                .selectable_label(app.cfg.accent == accent, accent.name())
-                                .clicked()
-                            {
-                                app.cfg.accent = accent;
-                                app.cfg.save();
-                            }
-                        }
-                    });
-                    ui.separator();
                     if ui
                         .add_enabled(!busy, egui::Button::new(&app.locale.menu_settings))
                         .clicked()
@@ -255,19 +226,6 @@ pub fn toolbar(app: &mut App, ui: &mut egui::Ui, busy: bool) {
                 }
 
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    let theme_icon = if app.cfg.dark { Icon::Sun } else { Icon::Moon };
-                    let hint = if app.cfg.dark {
-                        app.locale.text("light")
-                    } else {
-                        app.locale.text("dark")
-                    };
-                    if widgets::button(ui, Some(theme_icon), "", Btn::Ghost, true)
-                        .on_hover_text(hint)
-                        .clicked()
-                    {
-                        app.cfg.dark = !app.cfg.dark;
-                        app.cfg.save();
-                    }
                     let update_label = match &app.update {
                         crate::app::UpdateState::Checking => &app.locale.update_checking,
                         crate::app::UpdateState::Available { latest, .. } => {

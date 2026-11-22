@@ -1,0 +1,172 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 960 440" width="960" height="440" xmlns:c2pa="http://c2pa.org/manifest">
+  <defs>
+    <!-- Великобритания (центральная часть 3:2) -->
+    <symbol id="gb" viewBox="7.5 0 45 30" preserveAspectRatio="xMidYMid slice">
+      <clipPath id="gb-s"><path d="M0,0 v30 h60 v-30 z"/></clipPath>
+      <clipPath id="gb-t"><path d="M30,15 h30 v15 z v15 h-30 z h-30 v-15 z v-15 h30 z"/></clipPath>
+      <g clip-path="url(#gb-s)">
+        <path d="M0,0 v30 h60 v-30 z" fill="#012169"/>
+        <path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" stroke-width="6"/>
+        <path d="M0,0 L60,30 M60,0 L0,30" clip-path="url(#gb-t)" stroke="#C8102E" stroke-width="4"/>
+        <path d="M30,0 v30 M0,15 h60" stroke="#fff" stroke-width="10"/>
+        <path d="M30,0 v30 M0,15 h60" stroke="#C8102E" stroke-width="6"/>
+      </g>
+    </symbol>
+
+    <!-- Россия -->
+    <symbol id="ru" viewBox="0 0 9 6">
+      <rect width="9" height="2" fill="#fff"/>
+      <rect y="2" width="9" height="2" fill="#0039A6"/>
+      <rect y="4" width="9" height="2" fill="#D52B1E"/>
+    </symbol>
+
+    <!-- Германия -->
+    <symbol id="de" viewBox="0 0 3 2">
+      <rect width="3" height="2" fill="#FFCE00"/>
+      <rect width="3" height="1.3334" fill="#DD0000"/>
+      <rect width="3" height="0.6667" fill="#000"/>
+    </symbol>
+
+    <!-- Испания (с гербом) -->
+    <symbol id="es" viewBox="0 0 300 200">
+      <defs>
+        <clipPath id="es-shield"><path d="M40,30 H80 V66 Q80,77 60,85 Q40,77 40,66 Z"/></clipPath>
+        <g id="es-pillar">
+          <rect x="-3" y="21" width="6" height="45" fill="#fff" stroke="#c9c9c9" stroke-width=".4"/>
+          <rect x="-5" y="17.5" width="10" height="3.5" fill="#F1BF00" stroke="#B8860B" stroke-width=".3"/>
+          <rect x="-5.8" y="15.5" width="11.6" height="2" fill="#F1BF00" stroke="#B8860B" stroke-width=".3"/>
+          <rect x="-6" y="66" width="12" height="2" fill="#F1BF00" stroke="#B8860B" stroke-width=".3"/>
+          <rect x="-7" y="68" width="14" height="2" fill="#F1BF00" stroke="#B8860B" stroke-width=".3"/>
+        </g>
+        <g id="es-ribbon" fill="none" stroke="#AA151B" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21,35 Q31,30 42,35" stroke-width="3.5"/>
+          <path d="M25,40 Q19,47 27,50 Q35,53 42,49" stroke-width="3"/>
+          <path d="M26,50 Q22,56 24,61" stroke-width="3"/>
+        </g>
+      </defs>
+      <rect width="300" height="200" fill="#AA151B"/>
+      <rect y="50" width="300" height="100" fill="#F1BF00"/>
+
+      <!-- герб: центр смещён к древку, как на официальном флаге -->
+      <g transform="translate(135 55) scale(1.065) translate(-60 0)">
+        <!-- колонны Геракла -->
+        <use href="#es-pillar" xlink:href="#es-pillar" x="32.4"/>
+        <use href="#es-pillar" xlink:href="#es-pillar" x="87.6"/>
+        <!-- ленты Plus Ultra -->
+        <use href="#es-ribbon" xlink:href="#es-ribbon"/>
+        <use href="#es-ribbon" xlink:href="#es-ribbon" transform="translate(120 0) scale(-1 1)"/>
+
+        <!-- щит -->
+        <g clip-path="url(#es-shield)">
+          <rect x="40" y="30" width="40" height="56" fill="#AA151B"/>
+          <!-- Кастилия: белое поле льва (Леон) -->
+          <rect x="60" y="30" width="20" height="27" fill="#fff"/>
+          <g fill="#AA151B">
+            <circle cx="66" cy="35.5" r="2.4"/>
+            <path d="M66,38 Q72,38 74,44 Q75,50 73,54 L70,54 Q70,49 68,47 Q66,51 66,54 L63,54 Q64,48 65,44 Q64,41 66,38 Z"/>
+            <path d="M64,40 L61,37 L62.5,36 L66,39 Z"/>
+            <path d="M64,43 L60.5,42 L61,40.5 L65,41.5 Z"/>
+            <path d="M74,46 Q79,44 78,38 Q77,36 75,37" fill="none" stroke="#AA151B" stroke-width="1"/>
+            <circle cx="75" cy="36.8" r="1.1"/>
+          </g>
+          <path d="M64.6,33.6 l.8,-1.6 l.8,1 l.8,-1 l.8,1.6 z" fill="#F1BF00"/>
+          <!-- Кастилия: замок -->
+          <g fill="#F1BF00" stroke="#B8860B" stroke-width=".3">
+            <rect x="47.5" y="33" width="5" height="9"/>
+            <rect x="43.5" y="38" width="4" height="8"/>
+            <rect x="52.5" y="38" width="4" height="8"/>
+            <rect x="43.5" y="44" width="13" height="8"/>
+            <rect x="47.5" y="31.8" width="1.4" height="1.2"/><rect x="49.3" y="31.8" width="1.4" height="1.2"/><rect x="51.1" y="31.8" width="1.4" height="1.2"/>
+            <rect x="43.5" y="36.8" width="1.3" height="1.2"/><rect x="46.2" y="36.8" width="1.3" height="1.2"/>
+            <rect x="52.5" y="36.8" width="1.3" height="1.2"/><rect x="55.2" y="36.8" width="1.3" height="1.2"/>
+          </g>
+          <g fill="#0F47AF">
+            <path d="M48.8,52 V48.6 a1.2,1.2 0 0 1 2.4,0 V52 Z"/>
+            <rect x="49.4" y="35" width="1.2" height="2.4"/>
+            <rect x="45" y="40.5" width="1" height="2"/><rect x="54" y="40.5" width="1" height="2"/>
+          </g>
+          <!-- Арагон: полосы -->
+          <rect x="40" y="57" width="20" height="28" fill="#F1BF00"/>
+          <g fill="#AA151B">
+            <rect x="42.22" y="57" width="2.22" height="28"/>
+            <rect x="46.67" y="57" width="2.22" height="28"/>
+            <rect x="51.11" y="57" width="2.22" height="28"/>
+            <rect x="55.56" y="57" width="2.22" height="28"/>
+          </g>
+          <!-- Наварра: цепи -->
+          <g fill="none" stroke="#F1BF00" stroke-width=".9" stroke-dasharray="1.5 .7">
+            <rect x="62" y="59.5" width="16" height="17" rx="3"/>
+            <path d="M70,59.5 V76.5 M62,68 H78 M64,62 L76,74 M76,62 L64,74"/>
+            <circle cx="70" cy="68" r="2.2"/>
+          </g>
+          <!-- Гранада: гранат -->
+          <path d="M52.6,74 Q60,78 67.4,74 Q66,82 60,86 Q54,82 52.6,74 Z" fill="#fff"/>
+          <circle cx="60" cy="79.3" r="2.2" fill="#AA151B"/>
+          <path d="M57,83 Q60,81 63,83 M60,81.5 V84.5" stroke="#3E7B2F" stroke-width=".9" fill="none" stroke-linecap="round"/>
+          <!-- центральный щиток (Савойя) -->
+          <circle cx="60" cy="57" r="6.5" fill="#AA151B" stroke="#fff" stroke-width=".6"/>
+          <rect x="58.7" y="51.8" width="2.6" height="10.4" fill="#fff"/>
+          <rect x="54.8" y="55.7" width="10.4" height="2.6" fill="#fff"/>
+        </g>
+        <path d="M40,30 H80 V66 Q80,77 60,85 Q40,77 40,66 Z" fill="none" stroke="#8a6d1b" stroke-width=".8"/>
+
+        <!-- корона -->
+        <path d="M43,23.5 C41,12 48,9 60,9 C72,9 79,12 77,23.5 Z" fill="#AA151B"/>
+        <path d="M44,22 Q48,8 60,8.5 Q72,8 76,22" fill="none" stroke="#F1BF00" stroke-width="1.8"/>
+        <path d="M52,22 Q54,10 60,9 Q66,10 68,22" fill="none" stroke="#F1BF00" stroke-width="1.4"/>
+        <g fill="#fff" stroke="#B8860B" stroke-width=".25">
+          <circle cx="45.5" cy="15.5" r="1"/><circle cx="48.5" cy="11.5" r="1"/><circle cx="53" cy="9.2" r="1"/>
+          <circle cx="67" cy="9.2" r="1"/><circle cx="71.5" cy="11.5" r="1"/><circle cx="74.5" cy="15.5" r="1"/>
+        </g>
+        <g fill="#F1BF00" stroke="#B8860B" stroke-width=".25">
+          <path d="M46,23.5 l1.5,-6 l1.5,6 z"/><path d="M52,23.5 l2,-7 l2,7 z"/><path d="M58,23.5 l2,-8 l2,8 z"/>
+          <path d="M64,23.5 l2,-7 l2,7 z"/><path d="M71,23.5 l1.5,-6 l1.5,6 z"/>
+          <rect x="42" y="23.5" width="36" height="5.5" rx=".8"/>
+        </g>
+        <g fill="#AA151B"><circle cx="47" cy="26.2" r="1.1"/><circle cx="60" cy="26.2" r="1.1" fill="#3E7B2F"/><circle cx="73" cy="26.2" r="1.1"/></g>
+        <circle cx="60" cy="6" r="2.6" fill="#0F47AF" stroke="#F1BF00" stroke-width=".7"/>
+        <rect x="59.3" y="0" width="1.4" height="3.4" fill="#F1BF00"/><rect x="58.2" y="1" width="3.6" height="1.2" fill="#F1BF00"/>
+      </g>
+    </symbol>
+
+    <!-- Испания (простой вариант без герба, для мелких иконок) -->
+    <symbol id="es-simple" viewBox="0 0 3 2">
+      <rect width="3" height="2" fill="#AA151B"/>
+      <rect y="0.5" width="3" height="1" fill="#F1BF00"/>
+    </symbol>
+
+    <!-- Франция -->
+    <symbol id="fr" viewBox="0 0 3 2">
+      <rect width="1" height="2" fill="#0055A4"/>
+      <rect x="1" width="1" height="2" fill="#fff"/>
+      <rect x="2" width="1" height="2" fill="#EF4135"/>
+    </symbol>
+
+    <!-- Китай -->
+    <path id="cn-star" d="M0,-1 L0.2245,-0.309 L0.951,-0.309 L0.363,0.118 L0.588,0.809 L0,0.382 L-0.588,0.809 L-0.363,0.118 L-0.951,-0.309 L-0.2245,-0.309 Z"/>
+    <symbol id="cn" viewBox="0 0 30 20">
+      <rect width="30" height="20" fill="#DE2910"/>
+      <g fill="#FFDE00">
+        <use xlink:href="#cn-star" href="#cn-star" transform="translate(5,5) scale(3)"/>
+        <use xlink:href="#cn-star" href="#cn-star" transform="translate(10,2) rotate(239.04)"/>
+        <use xlink:href="#cn-star" href="#cn-star" transform="translate(12,4) rotate(261.87)"/>
+        <use xlink:href="#cn-star" href="#cn-star" transform="translate(12,7) rotate(285.95)"/>
+        <use xlink:href="#cn-star" href="#cn-star" transform="translate(10,9) rotate(308.66)"/>
+      </g>
+    </symbol>
+  </defs>
+
+  <!-- Превью: сетка 3×2 (можно удалить, оставив только <defs>) -->
+  <use href="#gb" xlink:href="#gb" x="20"  y="10"  width="280" height="186.67"/>
+  <rect x="20" y="10" width="280" height="186.67" fill="none" stroke="#ccc" stroke-width="1"/>
+  <use href="#ru" xlink:href="#ru" x="340" y="10"  width="280" height="186.67"/>
+  <rect x="340" y="10" width="280" height="186.67" fill="none" stroke="#ccc" stroke-width="1"/>
+  <use href="#de" xlink:href="#de" x="660" y="10"  width="280" height="186.67"/>
+  <rect x="660" y="10" width="280" height="186.67" fill="none" stroke="#ccc" stroke-width="1"/>
+  <use href="#es" xlink:href="#es" x="20"  y="230" width="280" height="186.67"/>
+  <rect x="20" y="230" width="280" height="186.67" fill="none" stroke="#ccc" stroke-width="1"/>
+  <use href="#fr" xlink:href="#fr" x="340" y="230" width="280" height="186.67"/>
+  <rect x="340" y="230" width="280" height="186.67" fill="none" stroke="#ccc" stroke-width="1"/>
+  <use href="#cn" xlink:href="#cn" x="660" y="230" width="280" height="186.67"/>
+  <rect x="660" y="230" width="280" height="186.67" fill="none" stroke="#ccc" stroke-width="1"/>
+<metadata><c2pa:manifest>AAAWgmp1bWIAAAAeanVtZGMycGEAEQAQgAAAqgA4m3EDYzJwYQAAABZcanVtYgAAAEdqdW1kYzJtYQARABCAAACqADibcQN1cm46YzJwYTphMWM4MTMzYi03NjY4LTQwZjUtOTRmNS00YjRlOWI1NDk1ZGQAAAADl2p1bWIAAAApanVtZGMyYXMAEQAQgAAAqgA4m3EDYzJwYS5hc3NlcnRpb25zAAAAALxqdW1iAAAARGp1bWRjYm9yABEAEIAAAKoAOJtxE2MycGEuaW5ncmVkaWVudC52MwAAAAAYYzJzaPENA2i15fxcSalCpJSKY9cAAABwY2JvcqNpZGM6Zm9ybWF0bWltYWdlL3N2Zyt4bWxqaW5zdGFuY2VJRHgseG1wOmlpZDo3MjkyNmM1Ni03NmVjLTRhNTgtOWNhMi05NzIzYjY1MzhmMTlscmVsYXRpb25zaGlwaHBhcmVudE9mAAAB4mp1bWIAAABBanVtZGNib3IAEQAQgAAAqgA4m3ETYzJwYS5hY3Rpb25zLnYyAAAAABhjMnNoYv1rrjnfQP8dcSkNyyK8DAAAAZljYm9yomdhY3Rpb25zgqJmYWN0aW9ua2MycGEub3BlbmVkanBhcmFtZXRlcnOha2luZ3JlZGllbnRzgaJjdXJseC1zZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmluZ3JlZGllbnQudjNkaGFzaFggh9Q9UsW6xHktI2j+yHLrl1Pc58wEjpCO4UAZ+07qy6KkZmFjdGlvbngdY29tLmFudGhyb3BpYy5jbGF1ZGUucHJvdmlkZWRqcGFyYW1ldGVyc6F4H2NvbS5hbnRocm9waWMub3JpZ2luLWNvbmZpZGVuY2VndW5rbm93bmtkZXNjcmlwdGlvbnhmQ2xhdWRlIHByb3ZpZGVkIHRoaXMgZmlsZSBhdCB0aGUgcmVxdWVzdCBvZiBhIHVzZXIgYW5kIG1heSBoYXZlIGNyZWF0ZWQgb3IgbW9kaWZpZWQgdGhlIGZpbGUgY29udGVudHMubXNvZnR3YXJlQWdlbnShZG5hbWVmQ2xhdWRlcmFsbEFjdGlvbnNJbmNsdWRlZPUAAADIanVtYgAAAEBqdW1kY2JvcgARABCAAACqADibcRNjMnBhLmhhc2guZGF0YQAAAAAYYzJzaHeaenmPE1aFHdwKd6nBKf4AAACAY2JvcqVjYWxnZnNoYTI1NmNwYWRMAAAAAAAAAAAAAAAAZGhhc2hYIJHecmhahTFjTkMBD5JbKgB97YHXwwSoWTiDVHQEGsfXZG5hbWVuanVtYmYgbWFuaWZlc3RqZXhjbHVzaW9uc4GiZXN0YXJ0GSi1Zmxlbmd0aBkeBAAAAj5qdW1iAAAAJ2p1bWRjMmNsABEAEIAAAKoAOJtxA2MycGEuY2xhaW0udjIAAAACD2Nib3KlY2FsZ2ZzaGEyNTZpc2lnbmF0dXJleE1zZWxmI2p1bWJmPS9jMnBhL3VybjpjMnBhOmExYzgxMzNiLTc2NjgtNDBmNS05NGY1LTRiNGU5YjU0OTVkZC9jMnBhLnNpZ25hdHVyZWppbnN0YW5jZUlEeCx4bXA6aWlkOmMxNTA0ZDkwLTI5YzQtNDU4ZS1hYzMwLTdkYzU4ZTJlMTAwZHJjcmVhdGVkX2Fzc2VydGlvbnODomN1cmx4LXNlbGYjanVtYmY9YzJwYS5hc3NlcnRpb25zL2MycGEuaW5ncmVkaWVudC52M2RoYXNoWCCH1D1SxbrEeS0jaP7IcuuXU9znzASOkI7hQBn7TurLoqJjdXJseCpzZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmFjdGlvbnMudjJkaGFzaFggOH2YKUZe5CPxMaVA5QSPDBJVt56CN1SOAJD2UxYg/LqiY3VybHgpc2VsZiNqdW1iZj1jMnBhLmFzc2VydGlvbnMvYzJwYS5oYXNoLmRhdGFkaGFzaFggVc/J4Jo4U7aUgcG9DlMfviz6hsZ9UfAakEZf6c1SSJ10Y2xhaW1fZ2VuZXJhdG9yX2luZm+jZG5hbWVvQW50aHJvcGljIEZpbGVzZ3ZlcnNpb25lMS4wLjBrc3BlY1ZlcnNpb25lMi40LjAAABA4anVtYgAAAChqdW1kYzJjcwARABCAAACqADibcQNjMnBhLnNpZ25hdHVyZQAAABAIY2JvctKEWQISogEmGCFZAgowggIGMIIBjaADAgECAhRA5aAK7sI50L64g/oGQgU9Z1UTADAKBggqhkjOPQQDAzBJMRcwFQYDVQQKEw5BbnRocm9waWMsIFBCQzEuMCwGA1UEAxMlQW50aHJvcGljIENvbnRlbnQgQ3JlZGVudGlhbHMgUm9vdCBDQTAeFw0yNjA4MDcxODQzNTZaFw0yODA4MDYxOTQzNTZaMEQxFzAVBgNVBAoTDkFudGhyb3BpYywgUEJDMSkwJwYDVQQDEyBBbnRocm9waWMgQ2xhdWRlIENvbnRlbnQgU2lnbmluZzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABJh6CmvLUBgFFNU0vUKlOVtE6djd17L5SuwX0LemFisBM3dkd/3cyjxFA3Qo5S46fX0/ihY0VZ7mfb9KF703t5OjWDBWMA4GA1UdDwEB/wQEAwIHgDAVBgNVHSUEDjAMBgorBgEEAYPoXgIBMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAUzlHiBIFOZFsj+OPEz5o+nMHXXMIwCgYIKoZIzj0EAwMDZwAwZAIwMXMdFJ4BetLLVY7ORuE9noqbbAZOZn/aArXyTwFAZfKrPzxF2vPoJNf1+UCdg1XGAjBwX1zd9WGqYkqmL5SFqw1QySjr1zJfpJM9+1rdDwSPLMOPOjKuiXjoU/pUUeG9RwmhY3BhZFkNngAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPZYQPN6lBgvEiPWpvq42yr7E+LpgOejpjCXg9sKZbLJLLiX7jUrlyEQBGZebhWz+wZOI8MnaeqeeAQsk0KsEmM6M7I=</c2pa:manifest></metadata></svg>

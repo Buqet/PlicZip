@@ -9,6 +9,26 @@ use crate::theme::Palette;
 use crate::views::{action_button, primary_button};
 use crate::widgets::{self, mix, Icon, Kind as Btn};
 
+/// Показывает флаг из общего SVG-спрайта вместо platform-dependent emoji.
+fn flag_image(ui: &mut egui::Ui, language: Language) {
+    let (x, y) = match language {
+        Language::English => (20.0, 10.0),
+        Language::Russian => (340.0, 10.0),
+    };
+    let uv = egui::Rect::from_min_max(
+        egui::pos2(x / 960.0, y / 440.0),
+        egui::pos2((x + 280.0) / 960.0, (y + 186.67) / 440.0),
+    );
+    ui.add(
+        egui::Image::from_bytes(
+            "bytes://pliczip-flags.svg",
+            include_bytes!("../assets/flags.svg").as_slice(),
+        )
+        .uv(uv)
+        .fit_to_exact_size(vec2(28.0, 18.0)),
+    );
+}
+
 /// Модальное окно: затемнение фона, карточка с иконкой и заголовком.
 fn dialog(
     ctx: &egui::Context,
@@ -389,6 +409,7 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
             let mut close = false;
             let mut selected_language = app.cfg.language;
             let mut selected_accent = app.cfg.accent;
+            let mut selected_dark = app.cfg.dark;
             dialog(
                 ctx,
                 &app.locale.settings_title,
@@ -423,19 +444,21 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
                                         selected_language == language,
                                     ),
                                 };
-                                let response = ui.selectable_label(
-                                    selected,
-                                    egui::RichText::new(format!(
-                                        "{}  {}                                      {}%",
-                                        language.flag(),
-                                        name,
-                                        language.completion()
-                                    ))
-                                    .size(13.0),
-                                );
-                                if response.clicked() {
-                                    selected_language = language;
-                                }
+                                ui.horizontal(|ui| {
+                                    flag_image(ui, language);
+                                    let response = ui.selectable_label(
+                                        selected,
+                                        egui::RichText::new(format!(
+                                            "{}                                      {}%",
+                                            name,
+                                            language.completion()
+                                        ))
+                                        .size(13.0),
+                                    );
+                                    if response.clicked() {
+                                        selected_language = language;
+                                    }
+                                });
                             }
                         });
                     ui.label(
@@ -443,6 +466,26 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
                             .size(11.0)
                             .color(p.dim),
                     );
+                    ui.add_space(10.0);
+                    ui.label(
+                        egui::RichText::new(app.locale.text("theme"))
+                            .strong()
+                            .color(p.text),
+                    );
+                    ui.horizontal(|ui| {
+                        if ui
+                            .selectable_label(selected_dark, app.locale.text("dark"))
+                            .clicked()
+                        {
+                            selected_dark = true;
+                        }
+                        if ui
+                            .selectable_label(!selected_dark, app.locale.text("light"))
+                            .clicked()
+                        {
+                            selected_dark = false;
+                        }
+                    });
                     ui.add_space(10.0);
                     ui.label(
                         egui::RichText::new(app.locale.text("accent"))
@@ -455,15 +498,10 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
                         .inner_margin(egui::Margin::same(4))
                         .show(ui, |ui| {
                             for accent in Accent::ALL {
-                                let key = match accent {
-                                    Accent::Brass => "accent-brass",
-                                    Accent::Steel => "accent-steel",
-                                    Accent::Green => "accent-green",
-                                };
                                 if ui
                                     .selectable_label(
                                         selected_accent == accent,
-                                        app.locale.text(key),
+                                        app.locale.text(accent.key()),
                                     )
                                     .clicked()
                                 {
@@ -482,6 +520,11 @@ pub fn draw(app: &mut App, ctx: &egui::Context, p: Palette) {
             }
             if selected_accent != app.cfg.accent {
                 app.cfg.accent = selected_accent;
+                app.cfg.save();
+                crate::theme::apply(ctx, &app.cfg);
+            }
+            if selected_dark != app.cfg.dark {
+                app.cfg.dark = selected_dark;
                 app.cfg.save();
                 crate::theme::apply(ctx, &app.cfg);
             }

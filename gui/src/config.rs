@@ -13,16 +13,40 @@ pub enum Accent {
     Steel,
     /// Зелёный — тот же, что у «проверено».
     Green,
+    /// Голубой — спокойный холодный акцент.
+    Cyan,
+    /// Фиолетовый — насыщенный контрастный акцент.
+    Violet,
+    /// Розовый — тёплый выразительный акцент.
+    Rose,
+    /// Оранжевый — энергичный акцент.
+    Orange,
+    /// Синий — глубокий классический акцент.
+    Blue,
 }
 
 impl Accent {
-    pub const ALL: [Accent; 3] = [Accent::Brass, Accent::Steel, Accent::Green];
+    pub const ALL: [Accent; 8] = [
+        Accent::Brass,
+        Accent::Steel,
+        Accent::Green,
+        Accent::Cyan,
+        Accent::Violet,
+        Accent::Rose,
+        Accent::Orange,
+        Accent::Blue,
+    ];
 
-    pub fn name(self) -> &'static str {
+    pub fn key(self) -> &'static str {
         match self {
-            Accent::Brass => "Латунь",
-            Accent::Steel => "Сталь",
-            Accent::Green => "Зелёный",
+            Accent::Brass => "accent-brass",
+            Accent::Steel => "accent-steel",
+            Accent::Green => "accent-green",
+            Accent::Cyan => "accent-cyan",
+            Accent::Violet => "accent-violet",
+            Accent::Rose => "accent-rose",
+            Accent::Orange => "accent-orange",
+            Accent::Blue => "accent-blue",
         }
     }
 }
@@ -37,13 +61,6 @@ pub enum Language {
 
 impl Language {
     pub const ALL: [Language; 2] = [Language::Russian, Language::English];
-
-    pub fn flag(self) -> &'static str {
-        match self {
-            Language::Russian => "🇷🇺",
-            Language::English => "🇬🇧",
-        }
-    }
 
     pub fn completion(self) -> u8 {
         // Встроенные SOML-файлы синхронизированы по ключам.
@@ -153,9 +170,9 @@ mod tests {
     }
 
     #[test]
-    fn accent_names_are_in_russian() {
-        assert_eq!(Accent::Brass.name(), "Латунь");
-        assert_eq!(Accent::Steel.name(), "Сталь");
-        assert_eq!(Accent::Green.name(), "Зелёный");
+    fn accent_keys_cover_all_variants() {
+        assert_eq!(Accent::ALL.len(), 8);
+        assert_eq!(Accent::Brass.key(), "accent-brass");
+        assert_eq!(Accent::Blue.key(), "accent-blue");
     }
 }

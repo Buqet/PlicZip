@@ -293,6 +293,7 @@ impl App {
         startup_archive: Option<PathBuf>,
         startup_sources: Option<PathBuf>,
     ) -> Self {
+        egui_extras::install_image_loaders(&cc.egui_ctx);
         let cfg = Config::load();
         let locale = Locale::load(cfg.language);
         theme::apply(&cc.egui_ctx, &cfg);

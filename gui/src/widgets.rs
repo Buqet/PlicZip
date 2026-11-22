@@ -25,8 +25,6 @@ pub enum Icon {
     Cross,
     Lock,
     Search,
-    Sun,
-    Moon,
     Close,
     Layers,
 }
@@ -162,18 +160,6 @@ pub fn paint_icon(painter: &Painter, rect: Rect, icon: Icon, color: Color32, bg:
                 [p(10.4, 10.4), p(14.0, 14.0)],
                 Stroke::new(stroke.width * 1.2, color),
             );
-        }
-        Icon::Sun => {
-            painter.circle_filled(c, 3.0 * u, color);
-            for i in 0..8 {
-                let a = i as f32 * TAU / 8.0;
-                let d = vec2(a.cos(), a.sin());
-                painter.line_segment([c + d * 5.0 * u, c + d * 7.0 * u], stroke);
-            }
-        }
-        Icon::Moon => {
-            painter.circle_filled(p(8.0, 8.5), 5.8 * u, color);
-            painter.circle_filled(p(11.0, 5.5), 4.8 * u, bg);
         }
         Icon::Close => {
             painter.line_segment([p(4.0, 4.0), p(12.0, 12.0)], stroke);

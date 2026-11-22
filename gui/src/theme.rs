@@ -41,6 +41,11 @@ fn accent_dark(a: Accent) -> Color32 {
         Accent::Brass => Color32::from_rgb(0xE0, 0xB3, 0x56),
         Accent::Steel => Color32::from_rgb(0x8F, 0xA8, 0xC7),
         Accent::Green => Color32::from_rgb(0x3C, 0xB8, 0x8B),
+        Accent::Cyan => Color32::from_rgb(0x38, 0xC6, 0xD8),
+        Accent::Violet => Color32::from_rgb(0xB0, 0x87, 0xF9),
+        Accent::Rose => Color32::from_rgb(0xF0, 0x82, 0xA9),
+        Accent::Orange => Color32::from_rgb(0xF0, 0x8A, 0x4B),
+        Accent::Blue => Color32::from_rgb(0x58, 0x91, 0xE8),
     }
 }
 
@@ -50,6 +55,11 @@ fn accent_light(a: Accent) -> Color32 {
         Accent::Brass => Color32::from_rgb(0xA9, 0x7B, 0x24),
         Accent::Steel => Color32::from_rgb(0x4A, 0x63, 0x82),
         Accent::Green => Color32::from_rgb(0x1F, 0x8F, 0x68),
+        Accent::Cyan => Color32::from_rgb(0x0A, 0x7F, 0x8F),
+        Accent::Violet => Color32::from_rgb(0x6D, 0x43, 0xB5),
+        Accent::Rose => Color32::from_rgb(0xB4, 0x3E, 0x69),
+        Accent::Orange => Color32::from_rgb(0xB9, 0x51, 0x1C),
+        Accent::Blue => Color32::from_rgb(0x2F, 0x62, 0xB5),
     }
 }
 

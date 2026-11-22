@@ -19,6 +19,14 @@
 | 🇫🇷 | **[Français](gitlocales/FR-README.md)** | French | Documentation complète |
 | 🇨🇳 | **[中文](gitlocales/ZH-README.md)** | Chinese | 完整文档 |
 
+### Помочь с переводом интерфейса
+
+Хотите перевести PlicZip? Возьмите один из пустых файлов локализации GUI и
+отправьте Pull Request с заполненными строками: [Español](gui/locales/es.soml),
+[Deutsch](gui/locales/de.soml), [Français](gui/locales/fr.soml) или
+[中文](gui/locales/zh.soml). Существующие русская и английская локализации
+показывают полный набор ключей и служат образцом формата SOML.
+
 ---
 
 ## Быстрый старт / Quick start
@@ -42,6 +50,24 @@ $ pliczip x backup.plz -o ./восстановлено
 ---
 
 **Лицензия:** MIT OR Apache-2.0
+
+## v1.26.105 — Настройки, акценты и локализация
+
+### Русский
+
+- Убраны быстрые кнопки темы и акцента из вкладки «Вид» и верхней панели; настройки доступны в окне «Настройки».
+- Добавлены пять новых акцентов: голубой, фиолетовый, розовый, оранжевый и синий.
+- Emoji-флаги в выборе языка заменены на единый SVG-спрайт.
+- Добавлены пустые шаблоны локализаций GUI для испанского, немецкого, французского и китайского языков.
+- В README добавлены ссылки и инструкция для переводчиков.
+
+### English
+
+- Removed quick theme and accent controls from the View menu and toolbar; both settings are now available in Settings.
+- Added five new accents: cyan, violet, rose, orange, and blue.
+- Replaced emoji language flags with a shared SVG sprite.
+- Added empty GUI localization templates for Spanish, German, French, and Chinese.
+- Added translator links and instructions to the README.
 
 ## v1.26.103 — UX 2.0: Operation Center и Recent Archives
 
