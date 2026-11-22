@@ -42,6 +42,26 @@ $ pliczip x backup.plz -o ./восстановлено
 
 **Лицензия:** MIT OR Apache-2.0
 
+## v1.26.103 — UX 2.0: Operation Center и Recent Archives
+
+### Русский
+
+- Расширен Operation Center: подробные результаты операций и сохранение текста ошибок в истории.
+- Operation Center автоматически открывается после ошибки, его можно закрыть клавишей `Esc` или горячей клавишей `Ctrl+Shift+O`.
+- Добавлена горячая клавиша `Ctrl+Shift+C` для очистки истории операций.
+- В Recent Archives добавлены копирование полного пути, открытие расположения архива и удаление записи.
+- Добавлена локализация новых действий, уведомлений, скорости, ETA и единиц времени для RU/EN.
+- Исправлены CI-блокеры: удалены неиспользуемые импорты и обновлён `url` до версии `2.5.9`.
+
+### English
+
+- Expanded Operation Center with detailed operation results and persisted error messages in history.
+- Operation Center now opens automatically after failures and can be closed with `Esc` or `Ctrl+Shift+O`.
+- Added `Ctrl+Shift+C` to clear operation history.
+- Recent Archives now supports copying the full path, opening the archive location, and removing an entry.
+- Added RU/EN localization for new actions, notifications, speed, ETA, and time units.
+- Fixed CI blockers by removing unused imports and updating `url` to `2.5.9`.
+
 ## v1.26.102 — UX 2.0: Operation Center
 
 ### Русский
