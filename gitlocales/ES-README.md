@@ -52,7 +52,7 @@ No es necesario revisar GitHub manualmente:
 
 ```text
 pliczip update
-pliczip update --json
+pliczip update --ron
 ```
 
 El comando consulta el último release público de GitHub con un timeout corto. Solo muestra la versión y el enlace; no descarga ni ejecuta archivos automáticamente.

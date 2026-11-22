@@ -131,12 +131,12 @@ Standardmäßig werden Prüfsummen verifiziert, und bei Nichtübereinstimmung br
 
 ## Maschinenlesbare Ausgabe
 
-`l`, `i` und `t` verstehen `--json`:
+`l`, `i` und `t` verstehen `--ron`:
 
 ```
-pliczip l backup.plz --json
-pliczip i backup.plz --json
-pliczip t backup.plz --json     # {"ok": true, ...} oder {"ok": false, "error": ...}
+pliczip l backup.plz --ron
+pliczip i backup.plz --ron
+pliczip t backup.plz --ron     # {"ok": true, ...} oder {"ok": false, "error": ...}
 ```
 
 ## Grafische Oberfläche
@@ -183,7 +183,7 @@ maximal" mit Erklärung der Folgen, solid, Passwort, Volume-Größe, Kommentar;
 - **Fortschritt mit ehrlicher Prognose** — Geschwindigkeit und Restzeit werden
 über die letzten Sekunden berechnet, nicht ab Beginn gemittelt;
 - **Einstellungen** — Theme (dunkel/hell) und Akzent (Messing/Stahl/Grün)
-gespeichert in `%APPDATA%/pliczip/config.json`.
+gespeichert in `%APPDATA%/pliczip/config.kdl`.
 
 Noch nicht umgesetzt ist nur das Ändern eines bestehenden Archivs (Schaltfläche „Ändern"). Die `.plz`-Verknüpfung und das Explorer-Kontextmenü können über `--install-context-menu` eingerichtet werden.
 
@@ -308,7 +308,7 @@ gui/
   views.rs     Hauptfenster: Menü, Werkzeugleiste, Tabelle, Übersicht, Statusleiste
   dialogs.rs   Erstellung, Entpacken, Passwort, Fehler, Fortschritt
   theme.rs     Palette aus docs/design.md, Akzente
-  config.rs    Einstellungen in JSON
+  config.rs    Einstellungen in RON
   icon.rs      Anwendungszeichen, im Code zusammengesetzt
   progress.rs  Fortschrittskanal und Restzeitschätzung
 tests/

@@ -130,12 +130,12 @@ By default, checksums are verified and extraction stops with an error on mismatc
 
 ## Machine output
 
-`l`, `i`, and `t` understand `--json`:
+`l`, `i`, and `t` understand `--ron`:
 
 ```
-pliczip l backup.plz --json
-pliczip i backup.plz --json
-pliczip t backup.plz --json     # {"ok": true, ...} or {"ok": false, "error": ...}
+pliczip l backup.plz --ron
+pliczip i backup.plz --ron
+pliczip t backup.plz --ron     # {"ok": true, ...} or {"ok": false, "error": ...}
 ```
 
 ## GUI
@@ -183,7 +183,7 @@ comment;
 - **progress with honest forecasting** — speed and remaining time are
 computed over the last seconds, not averaged from the start;
 - **settings** — theme (dark/light) and accent (brass/steel/green)
-saved to `%APPDATA%/pliczip/config.json`.
+saved to `%APPDATA%/pliczip/config.kdl`.
 
 ### Windows Explorer context menu
 
@@ -330,7 +330,7 @@ gui/
   views.rs     main window: menu, toolbar, table, summary, status bar
   dialogs.rs   creation, extraction, password, error, progress
   theme.rs     palette from docs/design.md, accents
-  config.rs    settings in JSON
+  config.rs    settings in RON
   icon.rs      application mark, assembled in code
   progress.rs  progress channel and remaining-time estimation
 tests/
@@ -383,7 +383,7 @@ pliczip t backup.plz
 pliczip repair backup.plz
 ```
 
-`repair` changes an archive only after validating the recovery hash table and fails when parity is insufficient. Check for a newer release without opening GitHub manually with `pliczip update` or `pliczip update --json`; it only reads the GitHub API and never downloads or executes files automatically.
+`repair` changes an archive only after validating the recovery hash table and fails when parity is insufficient. Check for a newer release without opening GitHub manually with `pliczip update` or `pliczip update --ron`; it only reads the GitHub API and never downloads or executes files automatically.
 
 The fuzz target uses nightly Rust: `rustup toolchain install nightly && RUSTUP_TOOLCHAIN=nightly cargo fuzz run paths -- -max_total_time=60`.
 

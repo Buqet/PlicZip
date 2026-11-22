@@ -1,19 +1,19 @@
-# Большие бинарные файлы
+# Бенчмарки больших бинарных файлов
 
-`large_binary_benchmark.py` измеряет Store, Deflate q4, Brotli q5, Brotli q11 и Density на реальных бинарных файлах размером **строго больше 100 MiB**. Скрипт не генерирует и не добавляет входные файлы в репозиторий: пути передаются явно через `--input`.
+Бенчмарк проекта написан на Rust и измеряет Store, Deflate q4, Brotli q5, Brotli q11 и Density на реальных бинарных файлах размером строго больше 100 MiB. Входные файлы передаются явно и не копируются в репозиторий.
 
-Для каждого входного файла и метода выполняется заданное число повторов. Измеряются размер `.plz`, время упаковки и распаковки, а после каждой распаковки проверяется SHA-256 исходного и восстановленного файла. Результаты записываются в JSON и CSV.
+Для каждого файла и метода выполняется заданное число повторов. Измеряются размер `.plz`, время упаковки и распаковки. После распаковки проверяется SHA-256 исходного и восстановленного файла. Результаты сохраняются в `large-binary-results.ron`.
 
-Пример запуска на Linux:
+Пример запуска:
 
 ```bash
-cargo +stable build --release --locked -p pliczip
-python3 benchmarks/large_binary_benchmark.py \
+cargo build --release --locked --bin large_binary_benchmark
+cargo run --release --locked --bin large_binary_benchmark -- \
   --pliczip target/release/pliczip \
-  --input /usr/lib/chromium/chromium \
-  --input /home/ubuntu/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/libLLVM.so.23.1-rust-1.100.0-stable \
+  --input /path/to/binary-a \
+  --input /path/to/binary-b \
   --repetitions 3 \
   --output benchmark-results/large-binaries-YYYY-MM-DD
 ```
 
-Не следует запускать этот benchmark в обычном CI: он требует много дискового места и CPU. Для CI можно запускать его вручную на машине с подходящими реальными бинарниками, сохраняя путь к результатам как artifact.
+Не следует запускать такой benchmark в обычном CI: он требует много дискового места и CPU. Его можно запускать вручную на машине с подходящими реальными бинарниками, сохраняя каталог результатов как artifact.

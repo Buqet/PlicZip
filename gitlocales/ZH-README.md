@@ -129,12 +129,12 @@ pliczip x backup.plz --no-verify         # 不校验哈希（更快）
 
 ## 机器可读输出
 
-`l`、`i` 和 `t` 支持 `--json`：
+`l`、`i` 和 `t` 支持 `--ron`：
 
 ```
-pliczip l backup.plz --json
-pliczip i backup.plz --json
-pliczip t backup.plz --json     # {"ok": true, ...} 或 {"ok": false, "error": ...}
+pliczip l backup.plz --ron
+pliczip i backup.plz --ron
+pliczip t backup.plz --ron     # {"ok": true, ...} 或 {"ok": false, "error": ...}
 ```
 
 ## 图形界面
@@ -174,7 +174,7 @@ pliczip-gui backup.plz         # 打开归档（双击即为此方式）
 - **创建归档**——拖入文件、"快速/平衡/最大"滑块并说明后果、solid、密码、卷大小、注释；
 - **解压**——选择目录，默认校验哈希；
 - **带诚实预估的进度**——速度和剩余时间按最近几秒计算，而不是从开始的平均值；
-- **设置**——主题（深/浅）和强调色（黄铜/钢/绿色）保存到 `%APPDATA%/pliczip/config.json`。
+- **设置**——主题（深/浅）和强调色（黄铜/钢/绿色）保存到 `%APPDATA%/pliczip/config.kdl`。
 
 尚未完成的功能只有修改现有归档（“修改”按钮）；`.plz` 关联和右键菜单可通过 `--install-context-menu` 启用。
 
@@ -294,7 +294,7 @@ gui/
   views.rs     主窗口：菜单、工具栏、表格、概要、状态栏
   dialogs.rs   创建、解压、密码、错误、进度
   theme.rs     来自 docs/design.md 的调色板、强调色
-  config.rs    JSON 中的设置
+  config.rs    RON 中的设置
   icon.rs      应用标志，由代码构建
   progress.rs  进度通道和剩余时间估算
 tests/

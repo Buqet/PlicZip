@@ -160,12 +160,12 @@ pliczip x backup.plz --no-verify         # без проверки хешей (�
 
 ## Машинный вывод
 
-`l`, `i` и `t` понимают `--json`:
+`l`, `i` и `t` понимают `--ron`:
 
 ```
-pliczip l backup.plz --json
-pliczip i backup.plz --json
-pliczip t backup.plz --json     # {"ok": true, ...} или {"ok": false, "error": ...}
+pliczip l backup.plz --ron
+pliczip i backup.plz --ron
+pliczip t backup.plz --ron     # {"ok": true, ...} или {"ok": false, "error": ...}
 ```
 
 ## Графическая оболочка
@@ -213,7 +213,7 @@ pliczip-gui backup.plz         # открыть архив (так работа�
 - **прогресс с честным прогнозом** — скорость и остаток считаются по
 последним секундам, а не по среднему с начала;
 - **настройки** — тема (тёмная/светлая) и акцент (латунь/сталь/зелёный)
-сохраняются в `%APPDATA%/pliczip/config.json`.
+сохраняются в `%APPDATA%/pliczip/config.kdl`.
 
 ### Контекстное меню Windows
 
@@ -360,7 +360,7 @@ gui/
   views.rs     главное окно: меню, тулбар, таблица, сводка, статусбар
   dialogs.rs   создание, распаковка, пароль, ошибка, прогресс
   theme.rs     палитра из docs/design.md, акценты
-  config.rs    настройки в JSON
+  config.rs    настройки в RON
   icon.rs      знак приложения, собирается кодом
   progress.rs  канал прогресса и оценка остатка времени
 tests/
@@ -413,7 +413,7 @@ pliczip t backup.plz
 pliczip repair backup.plz
 ```
 
-`repair` изменяет архив только после проверки таблицы хешей и завершает работу с ошибкой, если parity недостаточно. Для проверки новой версии без открытия браузера используйте `pliczip update` или `pliczip update --json`. Команда только читает GitHub API и ничего не скачивает автоматически.
+`repair` изменяет архив только после проверки таблицы хешей и завершает работу с ошибкой, если parity недостаточно. Для проверки новой версии без открытия браузера используйте `pliczip update` или `pliczip update --ron`. Команда только читает GitHub API и ничего не скачивает автоматически.
 
 Для fuzzing нужен nightly Rust: `rustup toolchain install nightly && RUSTUP_TOOLCHAIN=nightly cargo fuzz run paths -- -max_total_time=60`.
 

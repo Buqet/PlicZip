@@ -1,4 +1,4 @@
-//! Настройки GUI: акцент, тема, последняя папка. Сохраняются в JSON.
+//! Настройки GUI: акцент, тема, последняя папка. Сохраняются в KDL.
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -114,30 +114,113 @@ impl Config {
     }
 
     pub fn path() -> Option<PathBuf> {
+        Some(Self::dir()?.join("config.kdl"))
+    }
+
+    fn legacy_path() -> Option<PathBuf> {
         Some(Self::dir()?.join("config.json"))
     }
 
-    /// Читает конфиг; при любой ошибке — значения по умолчанию.
+    /// Читает KDL-конфиг; старый JSON автоматически мигрируется при первом запуске.
     pub fn load() -> Self {
         let Some(path) = Self::path() else {
             return Self::default();
         };
-        let Ok(text) = std::fs::read_to_string(&path) else {
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            return parse_kdl(&text).unwrap_or_default();
+        }
+
+        let Some(legacy_path) = Self::legacy_path() else {
             return Self::default();
         };
-        serde_json::from_str(&text).unwrap_or_default()
+        let Ok(text) = std::fs::read_to_string(legacy_path) else {
+            return Self::default();
+        };
+        let config: Self = serde_json::from_str(&text).unwrap_or_default();
+        config.save();
+        config
     }
 
-    /// Пишет конфиг; ошибки молча игнорируются — настройки не критичны.
+    /// Пишет KDL-конфиг; ошибки молча игнорируются — настройки не критичны.
     pub fn save(&self) {
         let Some(dir) = Self::dir() else { return };
         if std::fs::create_dir_all(&dir).is_err() {
             return;
         }
-        if let Ok(text) = serde_json::to_string_pretty(self) {
-            let _ = std::fs::write(dir.join("config.json"), text);
+        let mut text = String::new();
+        text.push_str(&format!(
+            "accent {}\n",
+            kdl_string(&format!("{:?}", self.accent))
+        ));
+        text.push_str(&format!("dark #{}\n", self.dark));
+        text.push_str(&format!(
+            "language {}\n",
+            kdl_string(&format!("{:?}", self.language))
+        ));
+        for archive in &self.recent_archives {
+            text.push_str(&format!("recent_archives {}\n", kdl_string(archive)));
+        }
+        let _ = std::fs::write(dir.join("config.kdl"), text);
+    }
+}
+
+fn parse_kdl(text: &str) -> Option<Config> {
+    let document: kdl::KdlDocument = text.parse().ok()?;
+    let accent = match document
+        .get_arg("accent")
+        .and_then(kdl::KdlValue::as_string)
+        .unwrap_or("Brass")
+    {
+        "Brass" => Accent::Brass,
+        "Steel" => Accent::Steel,
+        "Green" => Accent::Green,
+        "Cyan" => Accent::Cyan,
+        "Violet" => Accent::Violet,
+        "Rose" => Accent::Rose,
+        "Orange" => Accent::Orange,
+        "Blue" => Accent::Blue,
+        _ => return None,
+    };
+    let language = match document
+        .get_arg("language")
+        .and_then(kdl::KdlValue::as_string)
+        .unwrap_or("Russian")
+    {
+        "Russian" => Language::Russian,
+        "English" => Language::English,
+        _ => return None,
+    };
+    let dark = document
+        .get_arg("dark")
+        .and_then(kdl::KdlValue::as_bool)
+        .unwrap_or(true);
+    let recent_archives = document
+        .iter_args("recent_archives")
+        .map(|value| value.as_string().map(str::to_owned))
+        .collect::<Option<Vec<_>>>()?;
+    Some(Config {
+        accent,
+        dark,
+        language,
+        recent_archives,
+    })
+}
+
+fn kdl_string(value: &str) -> String {
+    let mut quoted = String::with_capacity(value.len() + 2);
+    quoted.push('"');
+    for character in value.chars() {
+        match character {
+            '\\' => quoted.push_str("\\\\"),
+            '"' => quoted.push_str("\\\""),
+            '\n' => quoted.push_str("\\n"),
+            '\r' => quoted.push_str("\\r"),
+            '\t' => quoted.push_str("\\t"),
+            character => quoted.push(character),
         }
     }
+    quoted.push('"');
+    quoted
 }
 
 #[cfg(test)]
@@ -145,19 +228,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn config_round_trips_through_json() {
-        let cfg = Config {
-            accent: Accent::Steel,
-            dark: false,
-            language: Language::English,
-            recent_archives: vec!["backup.plz".into()],
-        };
-        let text = serde_json::to_string(&cfg).unwrap();
-        let back: Config = serde_json::from_str(&text).unwrap();
+    fn config_round_trips_through_kdl() {
+        let text =
+            "accent \"Steel\"\ndark #false\nlanguage \"English\"\nrecent_archives \"backup.plz\"\n";
+        let back = parse_kdl(text).unwrap();
         assert_eq!(back.accent, Accent::Steel);
         assert!(!back.dark);
         assert_eq!(back.language, Language::English);
         assert_eq!(back.recent_archives, vec!["backup.plz"]);
+    }
+
+    #[test]
+    fn kdl_string_escapes_archive_paths() {
+        assert_eq!(kdl_string("a\\b\"c\n"), "\"a\\\\b\\\"c\\n\"");
     }
 
     #[test]

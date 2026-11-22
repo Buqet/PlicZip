@@ -438,25 +438,25 @@ fn exclude_filter_is_applied() {
 }
 
 #[test]
-fn json_listing_is_json() {
-    let dir = workdir("json");
+fn ron_listing_is_ron() {
+    let dir = workdir("ron");
     let src = make_tree(&dir);
     let archive = dir.join("a.plz");
     let stamp = archive.to_string_lossy().into_owned();
     let src_stamp = src.to_string_lossy().into_owned();
     assert!(run(&["a", &stamp, &src_stamp, "-q"]).0);
 
-    let (ok, out, err) = run(&["l", &stamp, "--json"]);
+    let (ok, out, err) = run(&["l", &stamp, "--ron"]);
     assert!(ok, "{}", err);
-    assert!(out.trim_start().starts_with('{'), "не JSON: {}", out);
+    assert!(out.trim_start().starts_with('{'), "не RON: {}", out);
     assert!(out.contains("\"entries\""));
     assert!(out.contains("текст.txt"));
 
-    let (ok, out, _) = run(&["i", &stamp, "--json"]);
+    let (ok, out, _) = run(&["i", &stamp, "--ron"]);
     assert!(ok, "{}", out);
     assert!(out.contains("\"version\""));
 
-    let (ok, out, _) = run(&["t", &stamp, "--json"]);
+    let (ok, out, _) = run(&["t", &stamp, "--ron"]);
     assert!(ok, "{}", out);
     assert!(out.contains("\"ok\": true"), "{}", out);
 
@@ -485,15 +485,15 @@ fn recovery_record_roundtrip_and_damage_report() {
     let (ok, _, err) = run(&["a", &stamp, &src_stamp, "--recovery", "10%", "-q"]);
     assert!(ok, "создание с --recovery не удалось: {}", err);
 
-    let (ok, out, err) = run(&["i", &stamp, "--json"]);
+    let (ok, out, err) = run(&["i", &stamp, "--ron"]);
     assert!(ok, "{}", err);
-    let info: serde_json::Value = serde_json::from_str(&out).unwrap();
+    let info: serde_json::Value = ron::from_str(&out).unwrap();
     assert_eq!(info["recovery"]["percent"], 10);
     assert!(info["recovery"]["parity_shards"].as_u64().unwrap() >= 1);
 
-    let (ok, out, err) = run(&["t", &stamp, "--json"]);
+    let (ok, out, err) = run(&["t", &stamp, "--ron"]);
     assert!(ok, "{} {}", out, err);
-    let report: serde_json::Value = serde_json::from_str(&out).unwrap();
+    let report: serde_json::Value = ron::from_str(&out).unwrap();
     assert_eq!(report["recovery"]["ok"], true);
 
     let out_dir = dir.join("out");
@@ -509,10 +509,10 @@ fn recovery_record_roundtrip_and_damage_report() {
     let mut bytes = fs::read(&archive).unwrap();
     bytes[20_000] ^= 0xff;
     fs::write(&archive, &bytes).unwrap();
-    let (ok, out, err) = run(&["t", &stamp, "--json"]);
+    let (ok, out, err) = run(&["t", &stamp, "--ron"]);
     assert!(!ok);
     let report: serde_json::Value =
-        serde_json::from_str(&out).unwrap_or_else(|_| panic!("{} {}", out, err));
+        ron::from_str(&out).unwrap_or_else(|_| panic!("{} {}", out, err));
     let shard = info["recovery"]["shard_size"].as_u64().unwrap();
     assert_eq!(
         report["recovery"]["bad_data"],

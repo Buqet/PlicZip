@@ -45,6 +45,6 @@
 ## Файлы результатов
 
 - `large-binary-results.csv` — результаты каждого повтора.
-- `large-binary-results.json` — полные данные, хеши входных файлов и медианные сводки.
+- `large-binary-results.ron` — полные данные, хеши входных файлов и медианные сводки.
 - `large-binary-comparison.png` — графики размера и скорости.
-- `../../benchmarks/large_binary_benchmark.py` — воспроизводимый скрипт запуска.
+- ``src/bin/large_binary_benchmark.rs`` — воспроизводимый скрипт запуска.

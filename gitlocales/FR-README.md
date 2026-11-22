@@ -130,12 +130,12 @@ Par défaut, les sommes de contrôle sont vérifiées et l'extraction s'arrête 
 
 ## Sortie machine
 
-`l`, `i` et `t` comprennent `--json` :
+`l`, `i` et `t` comprennent `--ron` :
 
 ```
-pliczip l backup.plz --json
-pliczip i backup.plz --json
-pliczip t backup.plz --json     # {"ok": true, ...} ou {"ok": false, "error": ...}
+pliczip l backup.plz --ron
+pliczip i backup.plz --ron
+pliczip t backup.plz --ron     # {"ok": true, ...} ou {"ok": false, "error": ...}
 ```
 
 ## Interface graphique
@@ -183,7 +183,7 @@ commentaire ;
 - **progression avec prévision honnête** — vitesse et temps restant sont
 calculés sur les dernières secondes, pas moyennés depuis le début ;
 - **paramètres** — thème (sombre/clair) et accent (laiton/acier/vert)
-enregistrés dans `%APPDATA%/pliczip/config.json`.
+enregistrés dans `%APPDATA%/pliczip/config.kdl`.
 
 Il ne reste que la modification d'une archive existante (bouton « Modifier »). L'association `.plz` et le menu contextuel peuvent être activés avec `--install-context-menu`.
 
@@ -307,7 +307,7 @@ gui/
   views.rs     fenêtre principale : menu, barre d'outils, table, résumé, barre d'état
   dialogs.rs   création, extraction, mot de passe, erreur, progression
   theme.rs     palette de docs/design.md, accents
-  config.rs    paramètres en JSON
+  config.rs    paramètres en RON
   icon.rs      signe de l'application, assemblé en code
   progress.rs  canal de progression et estimation du temps restant
 tests/

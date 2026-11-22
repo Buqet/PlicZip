@@ -128,9 +128,9 @@ enum Cmd {
         #[arg(long, value_name = "МАСКА")]
         exclude: Vec<String>,
 
-        /// Вывести машинночитаемый JSON.
+        /// Вывести машинночитаемый RON.
         #[arg(long)]
-        json: bool,
+        ron: bool,
     },
 
     /// Распаковать архив.
@@ -176,9 +176,9 @@ enum Cmd {
         #[arg(long, value_name = "N", default_value_t = 100_000)]
         max_ratio: u64,
 
-        /// Вывести машинночитаемый JSON.
+        /// Вывести машинночитаемый RON.
         #[arg(long)]
-        json: bool,
+        ron: bool,
     },
 
     /// Показать содержимое архива.
@@ -204,9 +204,9 @@ enum Cmd {
         #[arg(short, long)]
         long: bool,
 
-        /// Вывести машинночитаемый JSON.
+        /// Вывести машинночитаемый RON.
         #[arg(long)]
-        json: bool,
+        ron: bool,
     },
 
     /// Проверить целостность архива, ничего не распаковывая.
@@ -232,9 +232,9 @@ enum Cmd {
         #[arg(long, value_name = "N", default_value_t = 100_000)]
         max_ratio: u64,
 
-        /// Вывести машинночитаемый JSON.
+        /// Вывести машинночитаемый RON.
         #[arg(long)]
-        json: bool,
+        ron: bool,
     },
 
     /// Показать сведения об архиве.
@@ -256,9 +256,9 @@ enum Cmd {
         #[arg(long = "keyfile", value_name = "ПУТЬ")]
         keyfile: Option<PathBuf>,
 
-        /// Вывести машинночитаемый JSON.
+        /// Вывести машинночитаемый RON.
         #[arg(long)]
-        json: bool,
+        ron: bool,
     },
 
     /// Восстановить повреждённый архив по записи parity.
@@ -266,16 +266,16 @@ enum Cmd {
         /// Путь к архиву с записью восстановления.
         #[arg(value_name = "АРХИВ")]
         archive: PathBuf,
-        /// Вывести машинночитаемый JSON.
+        /// Вывести машинночитаемый RON.
         #[arg(long)]
-        json: bool,
+        ron: bool,
     },
 
     /// Проверить наличие новой версии на GitHub.
     Update {
-        /// Вывести машинночитаемый JSON.
+        /// Вывести машинночитаемый RON.
         #[arg(long)]
-        json: bool,
+        ron: bool,
     },
 
     /// Создать случайный бинарный keyfile.
@@ -322,7 +322,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             recovery,
             include,
             exclude,
-            json,
+            ron,
         } => {
             let started = Instant::now();
             if keyfile.is_some() && (password.is_some() || password_file.is_some()) {
@@ -339,7 +339,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 block_size,
                 comment,
                 follow_links,
-                show_progress: !quiet && !json,
+                show_progress: !quiet && !ron,
                 password: secret,
                 password_bytes: key_bytes,
                 volume_size,
@@ -350,7 +350,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             };
             let stats = writer::create(&archive, &inputs, &opts)?;
 
-            if json {
+            if ron {
                 let document = serde_json::json!({
                     "ok": true,
                     "archive": archive.to_string_lossy(),
@@ -367,7 +367,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     "recovery_bytes": stats.recovery_bytes,
                     "seconds": started.elapsed().as_secs_f64(),
                 });
-                println!("{}", serde_json::to_string_pretty(&document)?);
+                println!("{}", ron_pretty(&document)?);
             } else if !quiet {
                 println!();
                 println!("PlicZip: создан архив {}", archive.display());
@@ -426,7 +426,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             no_symlinks,
             no_mtime,
             max_ratio,
-            json,
+            ron,
         } => {
             let started = Instant::now();
             let secret = password_for_open(
@@ -442,10 +442,10 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     key.as_ref().map(|value| value.as_slice()),
                     skip_existing,
                 )?;
-                if json {
+                if ron {
                     println!(
                         "{}",
-                        serde_json::to_string_pretty(&serde_json::json!({
+                        ron_pretty(&serde_json::json!({
                             "ok": true,
                             "format": kind.name(),
                             "files": stats.files,
@@ -475,12 +475,12 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 symlinks: !no_symlinks,
                 restore_mtime: !no_mtime,
                 max_ratio,
-                show_progress: !quiet && !json,
+                show_progress: !quiet && !ron,
                 progress: None,
             };
             let stats = ar.extract(&opts)?;
 
-            if json {
+            if ron {
                 let document = serde_json::json!({
                     "ok": true,
                     "files": stats.files,
@@ -490,7 +490,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     "bytes": stats.bytes,
                     "seconds": started.elapsed().as_secs_f64(),
                 });
-                println!("{}", serde_json::to_string_pretty(&document)?);
+                println!("{}", ron_pretty(&document)?);
             } else if !quiet {
                 println!();
                 println!(
@@ -514,7 +514,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             password_file,
             keyfile,
             long,
-            json,
+            ron,
         } => {
             let secret = password_for_open(
                 password.as_deref(),
@@ -525,13 +525,13 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 let key = external_password_bytes(secret.as_ref(), keyfile.as_deref())?;
                 let (kind, entries) =
                     external::list(&archive, key.as_ref().map(|value| value.as_slice()))?;
-                print_external_list(&archive, kind, &entries, long, json)?;
+                print_external_list(&archive, kind, &entries, long, ron)?;
                 return Ok(ExitCode::SUCCESS);
             }
             let ar = open_archive(&archive, secret.as_ref(), keyfile.as_deref())?;
             let (files, dirs, links) = ar.index.counts();
 
-            if json {
+            if ron {
                 let entries: Vec<serde_json::Value> = ar
                     .entries()
                     .iter()
@@ -562,7 +562,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     "blocks": ar.index.blocks.len(),
                     "entries": entries,
                 });
-                println!("{}", serde_json::to_string_pretty(&document)?);
+                println!("{}", ron_pretty(&document)?);
                 return Ok(ExitCode::SUCCESS);
             }
 
@@ -603,7 +603,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             password_file,
             keyfile,
             max_ratio,
-            json,
+            ron,
         } => {
             let started = Instant::now();
             let secret = password_for_open(
@@ -615,10 +615,10 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 let key = external_password_bytes(secret.as_ref(), keyfile.as_deref())?;
                 let (kind, files) =
                     external::test(&archive, key.as_ref().map(|value| value.as_slice()))?;
-                if json {
+                if ron {
                     println!(
                         "{}",
-                        serde_json::to_string_pretty(&serde_json::json!({
+                        ron_pretty(&serde_json::json!({
                             "ok": true,
                             "format": kind.name(),
                             "files": files,
@@ -636,25 +636,25 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 return Ok(ExitCode::SUCCESS);
             }
             let mut ar = open_archive(&archive, secret.as_ref(), keyfile.as_deref())?;
-            let rr_report = ar.verify_recovery(!quiet && !json)?;
+            let rr_report = ar.verify_recovery(!quiet && !ron)?;
             let rr_clean = rr_report.as_ref().is_none_or(|report| report.is_clean());
-            if !json {
+            if !ron {
                 if let Some(report) = &rr_report {
                     print_recovery_report(report, quiet);
                 }
             }
-            let rr_json = rr_report.as_ref().map(recovery_report_json);
-            match ar.test(!quiet && !json, max_ratio, None) {
+            let rr_ron = rr_report.as_ref().map(recovery_report_ron);
+            match ar.test(!quiet && !ron, max_ratio, None) {
                 Ok(report) => {
-                    if json {
+                    if ron {
                         let document = serde_json::json!({
                             "ok": rr_clean,
                             "blocks": report.blocks,
                             "files": report.files,
                             "bytes": report.bytes,
-                            "recovery": rr_json,
+                            "recovery": rr_ron,
                         });
-                        println!("{}", serde_json::to_string_pretty(&document)?);
+                        println!("{}", ron_pretty(&document)?);
                     } else if !quiet {
                         println!(
                             "  проверено {}, {} за {}",
@@ -666,7 +666,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     if rr_clean {
                         Ok(ExitCode::SUCCESS)
                     } else {
-                        if !json {
+                        if !ron {
                             eprintln!(
                                 "pliczip: данные архива целы, но повреждена запись для восстановления"
                             );
@@ -675,13 +675,13 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     }
                 }
                 Err(err) => {
-                    if json {
+                    if ron {
                         let document = serde_json::json!({
                             "ok": false,
                             "error": format!("{:#}", err),
-                            "recovery": rr_json,
+                            "recovery": rr_ron,
                         });
-                        println!("{}", serde_json::to_string_pretty(&document)?);
+                        println!("{}", ron_pretty(&document)?);
                     } else {
                         eprintln!("pliczip: архив повреждён: {:#}", err);
                     }
@@ -695,7 +695,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             password,
             password_file,
             keyfile,
-            json,
+            ron,
         } => {
             let secret = password_for_open(
                 password.as_deref(),
@@ -713,10 +713,10 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     .filter(|entry| !entry.is_dir)
                     .map(|entry| entry.size)
                     .sum();
-                if json {
+                if ron {
                     println!(
                         "{}",
-                        serde_json::to_string_pretty(&serde_json::json!({
+                        ron_pretty(&serde_json::json!({
                             "archive": archive.to_string_lossy(),
                             "format": kind.name(),
                             "encrypted": key.is_some(),
@@ -757,7 +757,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 .saturating_sub(ar.index_start)
                 .saturating_sub(pliczip::format::FOOTER_LEN);
 
-            if json {
+            if ron {
                 let document = serde_json::json!({
                     "archive": archive.to_string_lossy(),
                     "version": index.version,
@@ -787,7 +787,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
                         "merkle_root": hex(&trailer.merkle_root),
                     })),
                 });
-                println!("{}", serde_json::to_string_pretty(&document)?);
+                println!("{}", ron_pretty(&document)?);
                 return Ok(ExitCode::SUCCESS);
             }
 
@@ -857,12 +857,12 @@ fn run(cli: Cli) -> Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
 
-        Cmd::Repair { archive, json } => {
-            let report = pliczip::recovery::repair_file(&archive, !quiet && !json)?;
-            if json {
+        Cmd::Repair { archive, ron } => {
+            let report = pliczip::recovery::repair_file(&archive, !quiet && !ron)?;
+            if ron {
                 println!(
                     "{}",
-                    serde_json::to_string_pretty(&serde_json::json!({
+                    ron_pretty(&serde_json::json!({
                         "ok": true,
                         "restored_data": report.restored_data,
                         "restored_parity": report.restored_parity,
@@ -884,14 +884,14 @@ fn run(cli: Cli) -> Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
 
-        Cmd::Update { json } => {
+        Cmd::Update { ron } => {
             let release = pliczip::update::check_latest()?;
             let available = release.latest != format!("v{}", release.current)
                 && release.latest != release.current;
-            if json {
+            if ron {
                 println!(
                     "{}",
-                    serde_json::to_string_pretty(&serde_json::json!({
+                    ron_pretty(&serde_json::json!({
                         "ok": true,
                         "current": release.current,
                         "latest": release.latest,
@@ -964,7 +964,11 @@ fn parse_key_bytes(text: &str) -> Result<usize, String> {
     Ok(value)
 }
 
-fn recovery_report_json(report: &pliczip::recovery::VerifyReport) -> serde_json::Value {
+fn ron_pretty<T: serde::Serialize>(value: &T) -> Result<String, ron::Error> {
+    ron::ser::to_string_pretty(value, ron::ser::PrettyConfig::default())
+}
+
+fn recovery_report_ron(report: &pliczip::recovery::VerifyReport) -> serde_json::Value {
     serde_json::json!({
         "ok": report.is_clean(),
         "data_shards": report.data_shards,
@@ -1073,9 +1077,9 @@ fn print_external_list(
     kind: external::Kind,
     entries: &[external::Entry],
     long: bool,
-    json: bool,
+    ron: bool,
 ) -> Result<()> {
-    if json {
+    if ron {
         let document = serde_json::json!({
             "archive": archive.to_string_lossy(),
             "format": kind.name(),
@@ -1085,7 +1089,7 @@ fn print_external_list(
                 "size": entry.size,
             })).collect::<Vec<_>>(),
         });
-        println!("{}", serde_json::to_string_pretty(&document)?);
+        println!("{}", ron_pretty(&document)?);
         return Ok(());
     }
 
