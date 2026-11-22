@@ -2,7 +2,8 @@ name: Release
 
 # Собирает бинарники CLI и GUI под Linux, Windows и macOS и прикладывает их
 # к GitHub Release. Запускается на пуш тега `v*` (например `v0.10.111-beta`);
-# если релиза для тега ещё нет — создаёт его (теги с `-` — пре-релиз).
+# если для тега есть `docs/releases/<tag>.md`, использует его как release notes;
+# иначе генерирует заметки GitHub. Теги с `-` публикуются как пре-релизы.
 # Вручную (Actions → Release → Run workflow) можно доложить бинарники
 # в уже существующий релиз.
 
@@ -31,6 +32,9 @@ jobs:
     name: Релиз
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
       - name: Создать релиз, если его нет
         env:
           GH_TOKEN: ${{ github.token }}
@@ -38,7 +42,13 @@ jobs:
           if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Релиз $TAG уже есть — только доложим бинарники."
           else
-            flags=(--generate-notes --verify-tag --title "$TAG")
+            flags=(--verify-tag --title "$TAG")
+            notes_file="docs/releases/${TAG}.md"
+            if [ -f "$notes_file" ]; then
+              flags+=(--notes-file "$notes_file")
+            else
+              flags+=(--generate-notes)
+            fi
             case "$TAG" in *-*) flags+=(--prerelease) ;; esac
             if ! gh release create "$TAG" -R "$GITHUB_REPOSITORY" "${flags[@]}"; then
               # Release мог появиться между проверкой и create (например, при

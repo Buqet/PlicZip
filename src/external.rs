@@ -571,6 +571,30 @@ mod tests {
     }
 
     #[test]
+    fn seven_zip_extraction_rejects_path_traversal() {
+        let root =
+            std::env::temp_dir().join(format!("pliczip-7z-traversal-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+
+        let source = root.join("payload.txt");
+        fs::write(&source, b"must stay inside the extraction directory").unwrap();
+        let archive = root.join("malicious.7z");
+        let mut writer = sevenz_rust::SevenZWriter::create(&archive).unwrap();
+        let entry = sevenz_rust::SevenZArchiveEntry::from_path(&source, "../outside.txt".into());
+        writer
+            .push_archive_entry(entry, Some(File::open(&source).unwrap()))
+            .unwrap();
+        writer.finish().unwrap();
+
+        let output = root.join("out");
+        assert!(extract(&archive, &output, None, false).is_err());
+        assert!(!root.join("outside.txt").exists());
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn seven_zip_roundtrip() {
         let root = std::env::temp_dir().join(format!("pliczip-7z-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);

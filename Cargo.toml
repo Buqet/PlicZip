@@ -5,7 +5,7 @@ resolver = "2"
 
 [package]
 name = "pliczip"
-version = "1.26.105"
+version = "1.26.106"
 edition = "2021"
 rust-version = "1.89"
 description = "PlicZip — архиватор с собственным форматом .plz"

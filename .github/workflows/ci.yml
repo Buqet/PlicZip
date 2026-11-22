@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -12,24 +19,30 @@ jobs:
   quality:
     name: Проверки качества
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt
+          components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - name: Форматирование
         run: cargo fmt --all -- --check
       - name: Установка cargo-audit
         run: cargo install cargo-audit --locked
+      # Исключение только для известного path traversal в sevenz-rust:
+      # PlicZip распаковывает 7z собственным callback и проверяет каждый путь
+      # через normalized_path/join_safe до создания файла. Не вызывать здесь
+      # sevenz_rust::decompress_*; убрать исключение после замены зависимости.
       - name: Аудит зависимостей
         run: cargo audit --ignore RUSTSEC-2026-0245
-      - name: Тесты всего workspace
-        run: cargo test --workspace
+      - name: Clippy всего workspace
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
   test:
     name: Тесты (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -37,17 +50,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Clippy всего workspace
-        run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Тесты всего workspace
-        run: cargo test --workspace
+        run: cargo test --locked --workspace
 
   fuzz:
     name: Fuzz smoke test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly

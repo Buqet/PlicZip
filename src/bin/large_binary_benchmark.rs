@@ -3,6 +3,8 @@ use argh::FromArgs;
 use ron::ser::PrettyConfig;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
+use std::ffi::OsString;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -46,6 +48,54 @@ struct Args {
         from_str_fn(parse_repetitions)
     )]
     repetitions: u32,
+}
+
+fn parse_args() -> Args {
+    let raw: Vec<OsString> = std::env::args_os().skip(1).collect();
+    let mut non_utf8 = HashMap::new();
+    let mut args = Vec::with_capacity(raw.len());
+    for (index, arg) in raw.iter().enumerate() {
+        let value = match arg.to_str() {
+            Some(value) => value.to_owned(),
+            None => {
+                let token = format!("__PLICZIP_BENCH_NONUTF8_{}_{}__", std::process::id(), index);
+                non_utf8.insert(token.clone(), arg.clone());
+                token
+            }
+        };
+        if let Some((option, value)) = value.split_once('=') {
+            if matches!(
+                option,
+                "--pliczip" | "--input" | "--output" | "--repetitions"
+            ) {
+                args.push(option.to_owned());
+                args.push(value.to_owned());
+                continue;
+            }
+        }
+        args.push(value);
+    }
+
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    let mut parsed = Args::from_args(&["large_binary_benchmark"], &refs).unwrap_or_else(|early| {
+        if early.status.is_ok() {
+            println!("{}", early.output);
+            std::process::exit(0);
+        }
+        eprint!("{}", early.output);
+        std::process::exit(2);
+    });
+    let restore = |path: &mut PathBuf| {
+        if let Some(original) = path.to_str().and_then(|value| non_utf8.get(value)) {
+            *path = PathBuf::from(original);
+        }
+    };
+    restore(&mut parsed.pliczip);
+    restore(&mut parsed.output);
+    for input in &mut parsed.input {
+        restore(input);
+    }
+    parsed
 }
 
 #[derive(Clone, Copy)]
@@ -130,7 +180,10 @@ struct Report {
 }
 
 fn main() -> Result<()> {
-    let args: Args = argh::from_env();
+    let args = parse_args();
+    if args.input.is_empty() {
+        bail!("at least one --input is required");
+    }
     let pliczip = fs::canonicalize(&args.pliczip)
         .with_context(|| format!("pliczip binary not found: {}", args.pliczip.display()))?;
     if !pliczip.is_file() {

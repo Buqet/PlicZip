@@ -22,7 +22,12 @@ fn workdir(tag: &str) -> PathBuf {
 }
 
 fn run(args: &[&str]) -> (bool, String, String) {
+    run_in(Path::new("."), args)
+}
+
+fn run_in(directory: &Path, args: &[&str]) -> (bool, String, String) {
     let output = Command::new(binary())
+        .current_dir(directory)
         .args(args)
         .output()
         .expect("не удалось запустить pliczip");
@@ -543,5 +548,122 @@ fn recovery_record_roundtrip_and_damage_report() {
     let (ok, _, err) = run(&["a", &stamp, &src_stamp, "--recovery", "0"]);
     assert!(!ok);
     assert!(err.contains("от 1% до 100%"), "{}", err);
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn parser_preserves_options_and_help_named_paths() {
+    let dir = workdir("parser-paths");
+    fs::write(dir.join("-q"), b"must be archived").unwrap();
+    fs::write(dir.join("kept"), b"also archived").unwrap();
+    fs::write(dir.join("help"), b"ordinary file named help").unwrap();
+    let archive = dir.join("out.plz");
+    let (ok, _, err) = run_in(
+        &dir,
+        &["a", &archive.to_string_lossy(), "--", "-q", "kept", "help"],
+    );
+    assert!(ok, "{}", err);
+    let (ok, out, err) = run(&["l", &archive.to_string_lossy()]);
+    assert!(ok, "{}", err);
+    for expected in ["-q", "kept", "help"] {
+        assert!(out.contains(expected), "missing {expected:?}: {out}");
+    }
+    let (ok, _, _) = run_in(&dir, &["t", "help"]);
+    assert!(!ok, "a non-archive named `help` was reported as verified");
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn parser_keeps_clap_compatible_compact_and_equals_forms() {
+    let dir = workdir("parser-forms");
+    fs::write(dir.join("input"), b"payload").unwrap();
+    let archive = dir.join("out.plz");
+    let (ok, _, err) = run(&[
+        "a",
+        &archive.to_string_lossy(),
+        &dir.join("input").to_string_lossy(),
+        "-x9",
+        "--comment=sample",
+        "-q",
+    ]);
+    assert!(ok, "{}", err);
+    let (ok, out, err) = run(&["i", &archive.to_string_lossy(), "--ron"]);
+    assert!(ok, "{}", err);
+    assert!(out.contains("sample"), "{}", out);
+
+    let protected = dir.join("protected.plz");
+    let input = dir.join("input").to_string_lossy().into_owned();
+    let protected_arg = protected.to_string_lossy().into_owned();
+    let (ok, _, err) = run(&["a", &protected_arg, &input, "-p=secret", "-q"]);
+    assert!(ok, "short password form failed: {}", err);
+    let (ok, _, err) = run(&["t", &protected_arg, "-p=secret", "-q"]);
+    assert!(ok, "short password form could not verify archive: {}", err);
+
+    let version = Command::new(binary()).arg("--version").output().unwrap();
+    assert!(version.status.success());
+    assert!(String::from_utf8_lossy(&version.stdout).contains(env!("CARGO_PKG_VERSION")));
+    let help = Command::new(binary()).args(["a", "-h"]).output().unwrap();
+    assert!(help.status.success());
+    assert!(String::from_utf8_lossy(&help.stdout).contains("Usage:"));
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn missing_comment_value_cannot_turn_password_file_into_input() {
+    let dir = workdir("parser-missing-comment");
+    fs::write(dir.join("source"), b"ordinary data").unwrap();
+    fs::write(dir.join("pwfile"), b"do-not-archive-this-secret").unwrap();
+    let archive = dir.join("unsafe.plz");
+    let (ok, _, err) = run(&[
+        "a",
+        &archive.to_string_lossy(),
+        "source",
+        "--comment",
+        "--password-file",
+        "pwfile",
+    ]);
+    assert!(!ok, "malformed command unexpectedly succeeded");
+    assert!(!archive.exists(), "malformed command created an archive");
+    assert!(err.contains("missing its value"), "{}", err);
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn add_requires_inputs_before_password_prompt() {
+    let dir = workdir("parser-no-input");
+    let archive = dir.join("empty.plz");
+    let (ok, _, err) = run(&["a", &archive.to_string_lossy(), "-p"]);
+    assert!(!ok);
+    assert!(err.contains("не указано, что архивировать"), "{}", err);
+    assert!(!archive.exists());
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[cfg(unix)]
+#[test]
+fn parser_preserves_non_utf8_filesystem_paths() {
+    use std::os::unix::ffi::OsStrExt;
+
+    let dir = workdir("parser-non-utf8");
+    let name = std::ffi::OsStr::from_bytes(b"key\xff");
+    let key_path = dir.join(name);
+    let output = Command::new(binary())
+        .arg("keygen")
+        .arg(&key_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        key_path.is_file(),
+        "original non-UTF-8 path was not created"
+    );
+    assert!(
+        !dir.join("key\u{fffd}").exists(),
+        "path was lossy-converted"
+    );
     let _ = fs::remove_dir_all(&dir);
 }

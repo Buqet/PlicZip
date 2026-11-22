@@ -51,6 +51,20 @@ $ pliczip x backup.plz -o ./восстановлено
 
 **Лицензия:** MIT OR Apache-2.0
 
+## v1.26.106 — CLI compatibility and security fixes
+
+### Русский
+
+- Восстановлена совместимость CLI после перехода на `argh`; исправлены граничные случаи парсинга и запуска benchmark.
+- Усилены проверки путей при распаковке 7z; CI теперь запускает строгий Clippy и тесты на трёх ОС.
+- [Полный changelog на русском и английском](docs/releases/v1.26.106.md).
+
+### English
+
+- Restored CLI compatibility after the `argh` migration and fixed parser and benchmark edge cases.
+- Strengthened 7z extraction path checks; CI now runs strict Clippy and tests on three operating systems.
+- [Full Russian/English changelog](docs/releases/v1.26.106.md).
+
 ## v1.26.105 — Настройки, акценты и локализация
 
 ### Русский

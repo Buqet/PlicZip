@@ -11,6 +11,8 @@ use pliczip::util::{
     saved_percent,
 };
 use pliczip::{crypto, external, reader, util, writer};
+use std::collections::HashMap;
+use std::ffi::OsString;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -25,7 +27,7 @@ const PASSWORD_ENV: &str = "PLICZIP_PASSWORD";
 
 #[derive(FromArgs, Debug)]
 /// plicZip — архиватор с собственным форматом .plz.
-#[argh(help_triggers("-h", "--help", "help"))]
+#[argh(help_triggers("-h", "--help"))]
 struct Cli {
     /// не показывать прогресс и сводки.
     #[argh(switch, short = 'q')]
@@ -55,7 +57,7 @@ enum Cmd {
 
 #[derive(FromArgs, Debug)]
 /// создать архив из файлов и каталогов.
-#[argh(subcommand, name = "add")]
+#[argh(subcommand, name = "add", help_triggers("--help"))]
 struct Add {
     /// путь к создаваемому архиву.
     #[argh(positional, arg_name = "АРХИВ")]
@@ -125,7 +127,7 @@ struct Add {
 
 #[derive(FromArgs, Debug)]
 /// распаковать архив.
-#[argh(subcommand, name = "extract")]
+#[argh(subcommand, name = "extract", help_triggers("--help"))]
 struct Extract {
     /// путь к архиву.
     #[argh(positional, arg_name = "АРХИВ")]
@@ -169,7 +171,7 @@ struct Extract {
 
 #[derive(FromArgs, Debug)]
 /// показать содержимое архива.
-#[argh(subcommand, name = "list")]
+#[argh(subcommand, name = "list", help_triggers("--help"))]
 struct List {
     #[argh(positional, arg_name = "АРХИВ")]
     archive: PathBuf,
@@ -192,7 +194,7 @@ struct List {
 
 #[derive(FromArgs, Debug)]
 /// проверить целостность архива, ничего не распаковывая.
-#[argh(subcommand, name = "test")]
+#[argh(subcommand, name = "test", help_triggers("--help"))]
 struct Test {
     #[argh(positional, arg_name = "АРХИВ")]
     archive: PathBuf,
@@ -215,7 +217,7 @@ struct Test {
 
 #[derive(FromArgs, Debug)]
 /// показать сведения об архиве.
-#[argh(subcommand, name = "info")]
+#[argh(subcommand, name = "info", help_triggers("--help"))]
 struct Info {
     #[argh(positional, arg_name = "АРХИВ")]
     archive: PathBuf,
@@ -235,7 +237,7 @@ struct Info {
 
 #[derive(FromArgs, Debug)]
 /// восстановить повреждённый архив по записи parity.
-#[argh(subcommand, name = "repair")]
+#[argh(subcommand, name = "repair", help_triggers("--help"))]
 struct Repair {
     #[argh(positional, arg_name = "АРХИВ")]
     archive: PathBuf,
@@ -246,7 +248,7 @@ struct Repair {
 
 #[derive(FromArgs, Debug)]
 /// проверить наличие новой версии на GitHub.
-#[argh(subcommand, name = "update")]
+#[argh(subcommand, name = "update", help_triggers("--help"))]
 struct Update {
     #[argh(switch)]
     /// вывести машинночитаемый RON.
@@ -255,7 +257,7 @@ struct Update {
 
 #[derive(FromArgs, Debug)]
 /// создать случайный бинарный keyfile.
-#[argh(subcommand, name = "keygen")]
+#[argh(subcommand, name = "keygen", help_triggers("--help"))]
 struct Keygen {
     #[argh(positional, arg_name = "ПУТЬ")]
     path: PathBuf,
@@ -264,10 +266,138 @@ struct Keygen {
     bytes: usize,
 }
 
+fn is_value_option(arg: &str) -> bool {
+    matches!(
+        arg,
+        "--level"
+            | "-x"
+            | "--block-size"
+            | "-b"
+            | "--comment"
+            | "-c"
+            | "--password-file"
+            | "--keyfile"
+            | "--volume-size"
+            | "--recovery"
+            | "--include"
+            | "--exclude"
+            | "--output"
+            | "-o"
+            | "--max-ratio"
+            | "--bytes"
+            | "--pliczip"
+            | "--input"
+            | "--repetitions"
+    )
+}
+
+fn restore_path(path: &mut PathBuf, non_utf8: &HashMap<String, OsString>) {
+    if let Some(original) = path.to_str().and_then(|value| non_utf8.get(value)) {
+        *path = PathBuf::from(original);
+    }
+}
+
+fn restore_cli_paths(cli: &mut Cli, non_utf8: &HashMap<String, OsString>) {
+    let check_string = |value: &str| !non_utf8.contains_key(value);
+    match &mut cli.command {
+        Cmd::Add(args) => {
+            restore_path(&mut args.archive, non_utf8);
+            for path in &mut args.inputs {
+                restore_path(path, non_utf8);
+            }
+            if let Some(path) = &mut args.password_file {
+                restore_path(path, non_utf8);
+            }
+            if let Some(path) = &mut args.keyfile {
+                restore_path(path, non_utf8);
+            }
+            if !check_string(&args.comment)
+                || args.password.as_deref().is_some_and(|s| !check_string(s))
+                || args
+                    .include
+                    .iter()
+                    .chain(&args.exclude)
+                    .any(|s| !check_string(s))
+            {
+                cli_error("text options must contain valid UTF-8");
+            }
+        }
+        Cmd::Extract(args) => {
+            restore_path(&mut args.archive, non_utf8);
+            restore_path(&mut args.output, non_utf8);
+            if let Some(path) = &mut args.password_file {
+                restore_path(path, non_utf8);
+            }
+            if let Some(path) = &mut args.keyfile {
+                restore_path(path, non_utf8);
+            }
+            if args.password.as_deref().is_some_and(|s| !check_string(s)) {
+                cli_error("password must contain valid UTF-8");
+            }
+        }
+        Cmd::List(args) => {
+            restore_path(&mut args.archive, non_utf8);
+            if let Some(path) = &mut args.password_file {
+                restore_path(path, non_utf8);
+            }
+            if let Some(path) = &mut args.keyfile {
+                restore_path(path, non_utf8);
+            }
+            if args.password.as_deref().is_some_and(|s| !check_string(s)) {
+                cli_error("password must contain valid UTF-8");
+            }
+        }
+        Cmd::Test(args) => {
+            restore_path(&mut args.archive, non_utf8);
+            if let Some(path) = &mut args.password_file {
+                restore_path(path, non_utf8);
+            }
+            if let Some(path) = &mut args.keyfile {
+                restore_path(path, non_utf8);
+            }
+            if args.password.as_deref().is_some_and(|s| !check_string(s)) {
+                cli_error("password must contain valid UTF-8");
+            }
+        }
+        Cmd::Info(args) => {
+            restore_path(&mut args.archive, non_utf8);
+            if let Some(path) = &mut args.password_file {
+                restore_path(path, non_utf8);
+            }
+            if let Some(path) = &mut args.keyfile {
+                restore_path(path, non_utf8);
+            }
+            if args.password.as_deref().is_some_and(|s| !check_string(s)) {
+                cli_error("password must contain valid UTF-8");
+            }
+        }
+        Cmd::Repair(args) => restore_path(&mut args.archive, non_utf8),
+        Cmd::Keygen(args) => restore_path(&mut args.path, non_utf8),
+        Cmd::Update(_) => {}
+    }
+}
+
+fn cli_error(message: &str) -> ! {
+    eprintln!("{message}\nRun pliczip --help for more information.");
+    std::process::exit(2)
+}
+
 fn parse_cli() -> Cli {
-    let raw: Vec<String> = std::env::args_os()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect();
+    let raw_os: Vec<OsString> = std::env::args_os().skip(1).collect();
+    let mut non_utf8 = HashMap::new();
+    let mut raw = Vec::with_capacity(raw_os.len());
+    for (index, arg) in raw_os.iter().enumerate() {
+        let value = match arg.to_str() {
+            Some(value) => value.to_owned(),
+            None => {
+                let token = format!("__PLICZIP_NONUTF8_{}_{}__", std::process::id(), index);
+                non_utf8.insert(token.clone(), arg.clone());
+                token
+            }
+        };
+        raw.push(value);
+    }
+
     let command_names = [
         "add", "extract", "list", "test", "info", "repair", "update", "keygen",
     ];
@@ -280,38 +410,122 @@ fn parse_cli() -> Cli {
         ("r", "repair"),
     ];
     let mut normalized = Vec::with_capacity(raw.len() + 3);
-    let mut command_seen = false;
     let mut quiet = false;
     let mut no_utf8 = false;
-    for arg in raw.iter().skip(1) {
-        if !command_seen && command_names.contains(&arg.as_str()) {
-            command_seen = true;
-            normalized.push(arg.clone());
-            continue;
-        }
-        if !command_seen {
-            if let Some((_, canonical)) = aliases.iter().find(|(alias, _)| *alias == arg) {
-                command_seen = true;
-                normalized.push((*canonical).to_owned());
-                continue;
-            }
-        }
+    let mut index = 0;
+    // Root-level global flags may precede the command. Do not search for a
+    // command later in the argv: it could be an option value or a filename.
+    while let Some(arg) = raw.get(index) {
         match arg.as_str() {
             "-q" | "--quiet" => quiet = true,
             "--no-utf8" => no_utf8 = true,
+            "--version" => {
+                println!("pliczip {}", env!("CARGO_PKG_VERSION"));
+                std::process::exit(0);
+            }
+            value if command_names.contains(&value) => {
+                normalized.push(value.to_owned());
+                index += 1;
+                break;
+            }
+            value if aliases.iter().any(|(alias, _)| *alias == value) => {
+                normalized.push(
+                    aliases
+                        .iter()
+                        .find(|(alias, _)| *alias == value)
+                        .unwrap()
+                        .1
+                        .to_owned(),
+                );
+                index += 1;
+                break;
+            }
+            _ => break,
+        }
+        index += 1;
+    }
+
+    let mut options_ended = false;
+    let mut expects_value = false;
+    for arg in raw.iter().skip(index) {
+        if options_ended {
+            normalized.push(arg.clone());
+            continue;
+        }
+        if expects_value {
+            if arg == "--" || (arg.starts_with('-') && arg.parse::<i64>().is_err()) {
+                cli_error("option is missing its value");
+            }
+            normalized.push(arg.clone());
+            expects_value = false;
+            continue;
+        }
+        if arg == "--" {
+            normalized.push(arg.clone());
+            options_ended = true;
+            continue;
+        }
+        match arg.as_str() {
+            "-q" | "--quiet" => {
+                quiet = true;
+                continue;
+            }
+            "--no-utf8" => {
+                no_utf8 = true;
+                continue;
+            }
+            "-h" | "--help" => {
+                normalized.push("--help".to_owned());
+                continue;
+            }
             "-p" | "--password" => {
                 normalized.push("--password".to_owned());
                 normalized.push(String::new());
+                continue;
             }
-            value if value.starts_with("--password=") => {
-                normalized.push("--password".to_owned());
-                normalized.push(value[11..].to_owned());
-            }
-            _ => normalized.push(arg.clone()),
+            _ => {}
         }
+
+        if let Some((option, value)) = arg.split_once('=') {
+            if option == "--password" {
+                normalized.push(option.to_owned());
+                normalized.push(value.to_owned());
+                continue;
+            }
+            if option == "-p" {
+                normalized.push("--password".to_owned());
+                normalized.push(value.to_owned());
+                continue;
+            }
+            if is_value_option(option) {
+                normalized.push(option.to_owned());
+                normalized.push(value.to_owned());
+                continue;
+            }
+        }
+
+        let short_value_option = ["-x", "-b", "-c", "-o"]
+            .iter()
+            .find(|option| arg.starts_with(**option) && arg.len() > option.len());
+        if let Some(option) = short_value_option {
+            let value = arg[option.len()..]
+                .strip_prefix('=')
+                .unwrap_or(&arg[option.len()..]);
+            normalized.push((*option).to_owned());
+            normalized.push(value.to_owned());
+            continue;
+        }
+
+        let takes_value = is_value_option(arg);
+        normalized.push(arg.clone());
+        expects_value = takes_value;
     }
-    let mut args = Vec::with_capacity(normalized.len() + 3);
-    args.push(raw.first().cloned().unwrap_or_else(|| "pliczip".to_owned()));
+    if expects_value {
+        cli_error("option is missing its value");
+    }
+
+    let mut args = Vec::with_capacity(normalized.len() + 2);
+    args.push("pliczip".to_owned());
     if quiet {
         args.push("--quiet".to_owned());
     }
@@ -320,17 +534,22 @@ fn parse_cli() -> Cli {
     }
     args.extend(normalized);
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    Cli::from_args(&[refs[0]], &refs[1..]).unwrap_or_else(|early| {
+    let mut cli = Cli::from_args(&[refs[0]], &refs[1..]).unwrap_or_else(|early| {
         if early.status.is_ok() {
             println!("{}", early.output);
             std::process::exit(0);
         }
-        eprintln!(
+        eprint!(
             "{}\nRun {} --help for more information.",
             early.output, refs[0]
         );
-        std::process::exit(1);
-    })
+        std::process::exit(2);
+    });
+    restore_cli_paths(&mut cli, &non_utf8);
+    if matches!(&cli.command, Cmd::Add(args) if args.inputs.is_empty()) {
+        cli_error("не указано, что архивировать");
+    }
+    cli
 }
 
 fn main() -> ExitCode {
