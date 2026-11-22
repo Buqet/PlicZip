@@ -2,15 +2,9 @@
 //!
 //! Команды повторяют привычные сокращения 7-Zip: `a` (add), `x` (extract),
 //! `l` (list), `t` (test), `i` (info).
-//!
-//! Пароль можно задать тремя способами, и все три не оставляют его в истории
-//! команд: интерактивный запрос (`-p` без значения), файл (`--password-file`)
-//! и переменная окружения `PLICZIP_PASSWORD`. Явное `--password=…`
-//! поддерживается, но только через знак равенства — иначе `-p backup.plz`
-//! съело бы имя архива как пароль.
 
 use anyhow::{bail, Context, Result};
-use clap::{Parser, Subcommand};
+use argh::FromArgs;
 use pliczip::prelude::*;
 use pliczip::util::{
     format_unix_time, human_bytes, human_duration, pad_left, pad_right, plural, ratio,
@@ -23,274 +17,324 @@ use std::process::ExitCode;
 use std::time::Instant;
 use zeroize::Zeroizing;
 
-/// Степень сжатия по умолчанию.
+/// степень сжатия по умолчанию.
 const DEFAULT_LEVEL: i32 = 5;
 
-/// Переменная окружения с паролем — удобно для скриптов.
+/// переменная окружения с паролем — удобно для скриптов.
 const PASSWORD_ENV: &str = "PLICZIP_PASSWORD";
 
-#[derive(Parser, Debug)]
-#[command(
-    name = "pliczip",
-    version,
-    about = "PlicZip — архиватор с собственным форматом .plz",
-    long_about = "PlicZip упаковывает файлы и каталоги в контейнер .plz.\n\
-                  Внутри: индекс в конце файла, сжатие deflate/brotli/density, BLAKE3\n\
-                  на каждый файл и блок, шифрование паролем и многотомные архивы.",
-    disable_help_subcommand = true,
-    after_help = "Пароль не обязательно указывать в команде:\n  \
-                  pliczip a -p арх.plz доки            спросит пароль дважды\n  \
-                  pliczip a --password=секрет арх.plz  явно, но видно в истории\n  \
-                  pliczip a --password-file pw.txt арх.plz доки\n\n\
-                  Примеры:\n  \
-                  pliczip a backup.plz ./фото           упаковать каталог\n  \
-                  pliczip a -x9 арх.plz a.txt b.txt     максимальное сжатие\n  \
-                  pliczip a --volume-size 100M арх.plz  разбить на тома\n  \
-                  pliczip l арх.plz -l                  подробный список\n  \
-                  pliczip x арх.plz -o ./куда           распаковать\n  \
-                  pliczip t арх.plz                     проверить целостность"
-)]
+#[derive(FromArgs, Debug)]
+/// plicZip — архиватор с собственным форматом .plz.
+#[argh(help_triggers("-h", "--help", "help"))]
 struct Cli {
-    /// Не показывать прогресс и сводки.
-    #[arg(short, long, global = true)]
+    /// не показывать прогресс и сводки.
+    #[argh(switch, short = 'q')]
     quiet: bool,
 
-    /// Не включать UTF-8 в консоли Windows (если мешает).
-    #[arg(long, global = true, hide = true)]
+    /// не включать UTF-8 в консоли Windows (если мешает).
+    #[argh(switch, hidden_help)]
     no_utf8: bool,
 
-    #[command(subcommand)]
+    /// подкоманда.
+    #[argh(subcommand)]
     command: Cmd,
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(FromArgs, Debug)]
+#[argh(subcommand)]
 enum Cmd {
-    /// Создать архив из файлов и каталогов.
-    #[command(alias = "a")]
-    Add {
-        /// Путь к создаваемому архиву.
-        #[arg(value_name = "АРХИВ")]
-        archive: PathBuf,
+    Add(Add),
+    Extract(Extract),
+    List(List),
+    Test(Test),
+    Info(Info),
+    Repair(Repair),
+    Update(Update),
+    Keygen(Keygen),
+}
 
-        /// Что упаковать (файлы и каталоги).
-        #[arg(value_name = "ПУТИ", required = true)]
-        inputs: Vec<PathBuf>,
+#[derive(FromArgs, Debug)]
+/// создать архив из файлов и каталогов.
+#[argh(subcommand, name = "add")]
+struct Add {
+    /// путь к создаваемому архиву.
+    #[argh(positional, arg_name = "АРХИВ")]
+    archive: PathBuf,
+    /// что упаковать (файлы и каталоги).
+    #[argh(positional, arg_name = "ПУТИ")]
+    inputs: Vec<PathBuf>,
+    /// степень сжатия: 0 — без сжатия, 1..4 — deflate, 5..11 — brotli.
+    #[argh(
+        option,
+        short = 'x',
+        long = "level",
+        default = "DEFAULT_LEVEL",
+        from_str_fn(parse_level)
+    )]
+    level: i32,
+    /// использовать Density (Lion) вместо метода, выбранного уровнем.
+    #[argh(switch)]
+    density: bool,
+    /// склеивать мелкие файлы в общие solid-блоки.
+    #[argh(switch, short = 's')]
+    solid: bool,
+    /// целевой размер solid-блока.
+    #[argh(
+        option,
+        short = 'b',
+        long = "block-size",
+        default = "parse_size(\"8M\").unwrap()",
+        from_str_fn(parse_size)
+    )]
+    block_size: u64,
+    /// комментарий, который сохранится в архиве.
+    #[argh(option, short = 'c', default = "String::new()")]
+    comment: String,
+    /// раскрывать символические ссылки вместо их сохранения.
+    #[argh(switch)]
+    follow_links: bool,
+    /// зашифровать паролем. Без значения пароль спрашивается интерактивно.
+    #[argh(option, short = 'p')]
+    /// пароль от зашифрованного архива.
+    password: Option<String>,
+    /// взять пароль из первой строки файла.
+    #[argh(option, long = "password-file")]
+    /// взять пароль из первой строки файла.
+    password_file: Option<PathBuf>,
+    /// взять ключ из бинарного файла.
+    #[argh(option, long = "keyfile")]
+    /// взять ключ из бинарного файла.
+    keyfile: Option<PathBuf>,
+    /// размер тома.
+    #[argh(option, long = "volume-size", from_str_fn(parse_size))]
+    volume_size: Option<u64>,
+    /// добавить запись для восстановления объёмом ПРОЦЕНТ от архива.
+    #[argh(option, from_str_fn(parse_percent))]
+    recovery: Option<u32>,
+    /// включить только эти маски (можно повторять).
+    #[argh(option)]
+    include: Vec<String>,
+    /// исключить эти маски (можно повторять).
+    #[argh(option)]
+    exclude: Vec<String>,
+    /// вывести машинночитаемый RON.
+    #[argh(switch)]
+    /// вывести машинночитаемый RON.
+    ron: bool,
+}
 
-        /// Степень сжатия: 0 — без сжатия, 1..4 — deflate, 5..11 — brotli.
-        #[arg(short = 'x', long = "level", value_name = "N", default_value_t = DEFAULT_LEVEL, value_parser = clap::value_parser!(i32).range(0..=11))]
-        level: i32,
+#[derive(FromArgs, Debug)]
+/// распаковать архив.
+#[argh(subcommand, name = "extract")]
+struct Extract {
+    /// путь к архиву.
+    #[argh(positional, arg_name = "АРХИВ")]
+    archive: PathBuf,
+    /// куда распаковывать.
+    #[argh(option, short = 'o', default = "PathBuf::from(\".\")")]
+    output: PathBuf,
+    /// пароль от зашифрованного архива.
+    #[argh(option, short = 'p')]
+    /// пароль от зашифрованного архива.
+    password: Option<String>,
+    /// взять пароль из первой строки файла.
+    #[argh(option, long = "password-file")]
+    /// взять пароль из первой строки файла.
+    password_file: Option<PathBuf>,
+    /// взять ключ из бинарного файла.
+    #[argh(option, long = "keyfile")]
+    /// взять ключ из бинарного файла.
+    keyfile: Option<PathBuf>,
+    /// не перезаписывать уже существующие файлы.
+    #[argh(switch)]
+    skip_existing: bool,
+    /// не проверять контрольные суммы.
+    #[argh(switch)]
+    no_verify: bool,
+    /// не восстанавливать символические ссылки.
+    #[argh(switch)]
+    no_symlinks: bool,
+    /// не восстанавливать время изменения.
+    #[argh(switch)]
+    no_mtime: bool,
+    /// максимально допустимая степень сжатия блока.
+    #[argh(option, default = "100_000")]
+    /// максимально допустимая степень сжатия блока.
+    max_ratio: u64,
+    /// вывести машинночитаемый RON.
+    #[argh(switch)]
+    /// вывести машинночитаемый RON.
+    ron: bool,
+}
 
-        /// Использовать Density (Lion) вместо метода, выбранного уровнем.
-        #[arg(long)]
-        density: bool,
+#[derive(FromArgs, Debug)]
+/// показать содержимое архива.
+#[argh(subcommand, name = "list")]
+struct List {
+    #[argh(positional, arg_name = "АРХИВ")]
+    archive: PathBuf,
+    #[argh(option, short = 'p')]
+    /// пароль от зашифрованного архива.
+    password: Option<String>,
+    #[argh(option, long = "password-file")]
+    /// взять пароль из первой строки файла.
+    password_file: Option<PathBuf>,
+    #[argh(option, long = "keyfile")]
+    /// взять ключ из бинарного файла.
+    keyfile: Option<PathBuf>,
+    /// подробный список: метод, дата, степень сжатия.
+    #[argh(switch, short = 'l')]
+    long: bool,
+    #[argh(switch)]
+    /// вывести машинночитаемый RON.
+    ron: bool,
+}
 
-        /// Склеивать мелкие файлы в общие solid-блоки.
-        #[arg(short, long)]
-        solid: bool,
+#[derive(FromArgs, Debug)]
+/// проверить целостность архива, ничего не распаковывая.
+#[argh(subcommand, name = "test")]
+struct Test {
+    #[argh(positional, arg_name = "АРХИВ")]
+    archive: PathBuf,
+    #[argh(option, short = 'p')]
+    /// пароль от зашифрованного архива.
+    password: Option<String>,
+    #[argh(option, long = "password-file")]
+    /// взять пароль из первой строки файла.
+    password_file: Option<PathBuf>,
+    #[argh(option, long = "keyfile")]
+    /// взять ключ из бинарного файла.
+    keyfile: Option<PathBuf>,
+    #[argh(option, default = "100_000")]
+    /// максимально допустимая степень сжатия блока.
+    max_ratio: u64,
+    #[argh(switch)]
+    /// вывести машинночитаемый RON.
+    ron: bool,
+}
 
-        /// Целевой размер solid-блока.
-        #[arg(short = 'b', long = "block-size", value_name = "РАЗМЕР", default_value = "8M", value_parser = parse_size)]
-        block_size: u64,
+#[derive(FromArgs, Debug)]
+/// показать сведения об архиве.
+#[argh(subcommand, name = "info")]
+struct Info {
+    #[argh(positional, arg_name = "АРХИВ")]
+    archive: PathBuf,
+    #[argh(option, short = 'p')]
+    /// пароль от зашифрованного архива.
+    password: Option<String>,
+    #[argh(option, long = "password-file")]
+    /// взять пароль из первой строки файла.
+    password_file: Option<PathBuf>,
+    #[argh(option, long = "keyfile")]
+    /// взять ключ из бинарного файла.
+    keyfile: Option<PathBuf>,
+    #[argh(switch)]
+    /// вывести машинночитаемый RON.
+    ron: bool,
+}
 
-        /// Комментарий, который сохранится в архиве.
-        #[arg(short = 'c', long, value_name = "ТЕКСТ", default_value = "")]
-        comment: String,
+#[derive(FromArgs, Debug)]
+/// восстановить повреждённый архив по записи parity.
+#[argh(subcommand, name = "repair")]
+struct Repair {
+    #[argh(positional, arg_name = "АРХИВ")]
+    archive: PathBuf,
+    #[argh(switch)]
+    /// вывести машинночитаемый RON.
+    ron: bool,
+}
 
-        /// Раскрывать символические ссылки вместо их сохранения.
-        #[arg(long)]
-        follow_links: bool,
+#[derive(FromArgs, Debug)]
+/// проверить наличие новой версии на GitHub.
+#[argh(subcommand, name = "update")]
+struct Update {
+    #[argh(switch)]
+    /// вывести машинночитаемый RON.
+    ron: bool,
+}
 
-        /// Зашифровать паролем. Без значения пароль спрашивается интерактивно.
-        #[arg(short = 'p', long, value_name = "ПАРОЛЬ", num_args = 0..=1, default_missing_value = "", require_equals = true)]
-        password: Option<String>,
+#[derive(FromArgs, Debug)]
+/// создать случайный бинарный keyfile.
+#[argh(subcommand, name = "keygen")]
+struct Keygen {
+    #[argh(positional, arg_name = "ПУТЬ")]
+    path: PathBuf,
+    #[argh(option, default = "32", from_str_fn(parse_key_bytes))]
+    /// размер ключа в байтах.
+    bytes: usize,
+}
 
-        /// Взять пароль из первой строки файла.
-        #[arg(long = "password-file", value_name = "ПУТЬ")]
-        password_file: Option<PathBuf>,
-
-        /// Взять ключ из бинарного файла (содержимое файла становится ключом).
-        #[arg(long = "keyfile", value_name = "ПУТЬ")]
-        keyfile: Option<PathBuf>,
-
-        /// Размер тома: архив разобьётся на файлы .001, .002, …
-        #[arg(long = "volume-size", value_name = "РАЗМЕР", value_parser = parse_size)]
-        volume_size: Option<u64>,
-
-        /// Добавить запись для восстановления объёмом ПРОЦЕНТ от архива (1..100).
-        #[arg(long, value_name = "ПРОЦЕНТ", value_parser = parse_percent)]
-        recovery: Option<u32>,
-
-        /// Включить только эти маски (можно повторять).
-        #[arg(long, value_name = "МАСКА")]
-        include: Vec<String>,
-
-        /// Исключить эти маски (можно повторять).
-        #[arg(long, value_name = "МАСКА")]
-        exclude: Vec<String>,
-
-        /// Вывести машинночитаемый RON.
-        #[arg(long)]
-        ron: bool,
-    },
-
-    /// Распаковать архив.
-    #[command(alias = "x")]
-    Extract {
-        /// Путь к архиву.
-        #[arg(value_name = "АРХИВ")]
-        archive: PathBuf,
-
-        /// Куда распаковывать.
-        #[arg(short = 'o', long, value_name = "КАТАЛОГ", default_value = ".")]
-        output: PathBuf,
-
-        /// Пароль от зашифрованного архива.
-        #[arg(short = 'p', long, value_name = "ПАРОЛЬ", num_args = 0..=1, default_missing_value = "", require_equals = true)]
-        password: Option<String>,
-
-        /// Взять пароль из первой строки файла.
-        #[arg(long = "password-file", value_name = "ПУТЬ")]
-        password_file: Option<PathBuf>,
-
-        /// Взять ключ из бинарного файла.
-        #[arg(long = "keyfile", value_name = "ПУТЬ")]
-        keyfile: Option<PathBuf>,
-
-        /// Не перезаписывать уже существующие файлы.
-        #[arg(long)]
-        skip_existing: bool,
-
-        /// Не проверять контрольные суммы.
-        #[arg(long)]
-        no_verify: bool,
-
-        /// Не восстанавливать символические ссылки.
-        #[arg(long)]
-        no_symlinks: bool,
-
-        /// Не восстанавливать время изменения.
-        #[arg(long)]
-        no_mtime: bool,
-
-        /// Максимально допустимая степень сжатия блока (0 — без ограничения).
-        #[arg(long, value_name = "N", default_value_t = 100_000)]
-        max_ratio: u64,
-
-        /// Вывести машинночитаемый RON.
-        #[arg(long)]
-        ron: bool,
-    },
-
-    /// Показать содержимое архива.
-    #[command(alias = "l")]
-    List {
-        /// Путь к архиву.
-        #[arg(value_name = "АРХИВ")]
-        archive: PathBuf,
-
-        /// Пароль от зашифрованного архива.
-        #[arg(short = 'p', long, value_name = "ПАРОЛЬ", num_args = 0..=1, default_missing_value = "", require_equals = true)]
-        password: Option<String>,
-
-        /// Взять пароль из первой строки файла.
-        #[arg(long = "password-file", value_name = "ПУТЬ")]
-        password_file: Option<PathBuf>,
-
-        /// Взять ключ из бинарного файла.
-        #[arg(long = "keyfile", value_name = "ПУТЬ")]
-        keyfile: Option<PathBuf>,
-
-        /// Подробный список: метод, дата, степень сжатия.
-        #[arg(short, long)]
-        long: bool,
-
-        /// Вывести машинночитаемый RON.
-        #[arg(long)]
-        ron: bool,
-    },
-
-    /// Проверить целостность архива, ничего не распаковывая.
-    #[command(alias = "t")]
-    Test {
-        /// Путь к архиву.
-        #[arg(value_name = "АРХИВ")]
-        archive: PathBuf,
-
-        /// Пароль от зашифрованного архива.
-        #[arg(short = 'p', long, value_name = "ПАРОЛЬ", num_args = 0..=1, default_missing_value = "", require_equals = true)]
-        password: Option<String>,
-
-        /// Взять пароль из первой строки файла.
-        #[arg(long = "password-file", value_name = "ПУТЬ")]
-        password_file: Option<PathBuf>,
-
-        /// Взять ключ из бинарного файла.
-        #[arg(long = "keyfile", value_name = "ПУТЬ")]
-        keyfile: Option<PathBuf>,
-
-        /// Максимально допустимая степень сжатия блока (0 — без ограничения).
-        #[arg(long, value_name = "N", default_value_t = 100_000)]
-        max_ratio: u64,
-
-        /// Вывести машинночитаемый RON.
-        #[arg(long)]
-        ron: bool,
-    },
-
-    /// Показать сведения об архиве.
-    #[command(alias = "i")]
-    Info {
-        /// Путь к архиву.
-        #[arg(value_name = "АРХИВ")]
-        archive: PathBuf,
-
-        /// Пароль от зашифрованного архива.
-        #[arg(short = 'p', long, value_name = "ПАРОЛЬ", num_args = 0..=1, default_missing_value = "", require_equals = true)]
-        password: Option<String>,
-
-        /// Взять пароль из первой строки файла.
-        #[arg(long = "password-file", value_name = "ПУТЬ")]
-        password_file: Option<PathBuf>,
-
-        /// Взять ключ из бинарного файла.
-        #[arg(long = "keyfile", value_name = "ПУТЬ")]
-        keyfile: Option<PathBuf>,
-
-        /// Вывести машинночитаемый RON.
-        #[arg(long)]
-        ron: bool,
-    },
-
-    /// Восстановить повреждённый архив по записи parity.
-    Repair {
-        /// Путь к архиву с записью восстановления.
-        #[arg(value_name = "АРХИВ")]
-        archive: PathBuf,
-        /// Вывести машинночитаемый RON.
-        #[arg(long)]
-        ron: bool,
-    },
-
-    /// Проверить наличие новой версии на GitHub.
-    Update {
-        /// Вывести машинночитаемый RON.
-        #[arg(long)]
-        ron: bool,
-    },
-
-    /// Создать случайный бинарный keyfile.
-    Keygen {
-        /// Куда сохранить ключ.
-        #[arg(value_name = "ПУТЬ")]
-        path: PathBuf,
-        /// Размер ключа в байтах.
-        #[arg(long, default_value_t = 32, value_parser = parse_key_bytes)]
-        bytes: usize,
-    },
+fn parse_cli() -> Cli {
+    let raw: Vec<String> = std::env::args_os()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect();
+    let command_names = [
+        "add", "extract", "list", "test", "info", "repair", "update", "keygen",
+    ];
+    let aliases = [
+        ("a", "add"),
+        ("x", "extract"),
+        ("l", "list"),
+        ("t", "test"),
+        ("i", "info"),
+        ("r", "repair"),
+    ];
+    let mut normalized = Vec::with_capacity(raw.len() + 3);
+    let mut command_seen = false;
+    let mut quiet = false;
+    let mut no_utf8 = false;
+    for arg in raw.iter().skip(1) {
+        if !command_seen && command_names.contains(&arg.as_str()) {
+            command_seen = true;
+            normalized.push(arg.clone());
+            continue;
+        }
+        if !command_seen {
+            if let Some((_, canonical)) = aliases.iter().find(|(alias, _)| *alias == arg) {
+                command_seen = true;
+                normalized.push((*canonical).to_owned());
+                continue;
+            }
+        }
+        match arg.as_str() {
+            "-q" | "--quiet" => quiet = true,
+            "--no-utf8" => no_utf8 = true,
+            "-p" | "--password" => {
+                normalized.push("--password".to_owned());
+                normalized.push(String::new());
+            }
+            value if value.starts_with("--password=") => {
+                normalized.push("--password".to_owned());
+                normalized.push(value[11..].to_owned());
+            }
+            _ => normalized.push(arg.clone()),
+        }
+    }
+    let mut args = Vec::with_capacity(normalized.len() + 3);
+    args.push(raw.first().cloned().unwrap_or_else(|| "pliczip".to_owned()));
+    if quiet {
+        args.push("--quiet".to_owned());
+    }
+    if no_utf8 {
+        args.push("--no-utf8".to_owned());
+    }
+    args.extend(normalized);
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    Cli::from_args(&[refs[0]], &refs[1..]).unwrap_or_else(|early| {
+        if early.status.is_ok() {
+            println!("{}", early.output);
+            std::process::exit(0);
+        }
+        eprintln!(
+            "{}\nRun {} --help for more information.",
+            early.output, refs[0]
+        );
+        std::process::exit(1);
+    })
 }
 
 fn main() -> ExitCode {
-    let cli = Cli::parse();
+    let cli = parse_cli();
     if !cli.no_utf8 {
         util::enable_utf8_console();
     }
@@ -306,7 +350,7 @@ fn main() -> ExitCode {
 fn run(cli: Cli) -> Result<ExitCode> {
     let quiet = cli.quiet;
     match cli.command {
-        Cmd::Add {
+        Cmd::Add(Add {
             archive,
             inputs,
             level,
@@ -323,7 +367,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             include,
             exclude,
             ron,
-        } => {
+        }) => {
             let started = Instant::now();
             if keyfile.is_some() && (password.is_some() || password_file.is_some()) {
                 bail!("нельзя комбинировать --password/--password-file и --keyfile");
@@ -415,7 +459,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
 
-        Cmd::Extract {
+        Cmd::Extract(Extract {
             archive,
             output,
             password,
@@ -427,7 +471,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             no_mtime,
             max_ratio,
             ron,
-        } => {
+        }) => {
             let started = Instant::now();
             let secret = password_for_open(
                 password.as_deref(),
@@ -508,14 +552,14 @@ fn run(cli: Cli) -> Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
 
-        Cmd::List {
+        Cmd::List(List {
             archive,
             password,
             password_file,
             keyfile,
             long,
             ron,
-        } => {
+        }) => {
             let secret = password_for_open(
                 password.as_deref(),
                 password_file.as_deref(),
@@ -597,14 +641,14 @@ fn run(cli: Cli) -> Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
 
-        Cmd::Test {
+        Cmd::Test(Test {
             archive,
             password,
             password_file,
             keyfile,
             max_ratio,
             ron,
-        } => {
+        }) => {
             let started = Instant::now();
             let secret = password_for_open(
                 password.as_deref(),
@@ -690,13 +734,13 @@ fn run(cli: Cli) -> Result<ExitCode> {
             }
         }
 
-        Cmd::Info {
+        Cmd::Info(Info {
             archive,
             password,
             password_file,
             keyfile,
             ron,
-        } => {
+        }) => {
             let secret = password_for_open(
                 password.as_deref(),
                 password_file.as_deref(),
@@ -857,7 +901,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
 
-        Cmd::Repair { archive, ron } => {
+        Cmd::Repair(Repair { archive, ron }) => {
             let report = pliczip::recovery::repair_file(&archive, !quiet && !ron)?;
             if ron {
                 println!(
@@ -884,7 +928,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
 
-        Cmd::Update { ron } => {
+        Cmd::Update(Update { ron }) => {
             let release = pliczip::update::check_latest()?;
             let available = release.latest != format!("v{}", release.current)
                 && release.latest != release.current;
@@ -911,7 +955,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
 
-        Cmd::Keygen { path, bytes } => {
+        Cmd::Keygen(Keygen { path, bytes }) => {
             let mut key = Zeroizing::new(vec![0u8; bytes]);
             getrandom::getrandom(&mut key)
                 .map_err(|err| anyhow::anyhow!("не удалось создать случайный keyfile: {err}"))?;
@@ -938,6 +982,17 @@ fn run(cli: Cli) -> Result<ExitCode> {
 }
 
 /// Разбирает объём записи для восстановления: `5` или `5%`.
+fn parse_level(text: &str) -> Result<i32, String> {
+    let value = text
+        .parse::<i32>()
+        .map_err(|_| "степень должна быть целым числом".to_owned())?;
+    if (0..=11).contains(&value) {
+        Ok(value)
+    } else {
+        Err("степень должна быть от 0 до 11".to_owned())
+    }
+}
+
 fn parse_percent(text: &str) -> Result<u32, String> {
     let digits = text.trim().trim_end_matches('%').trim();
     let value: u32 = digits

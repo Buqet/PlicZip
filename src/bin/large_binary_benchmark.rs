@@ -1,5 +1,5 @@
 use anyhow::{bail, Context, Result};
-use clap::Parser;
+use argh::FromArgs;
 use ron::ser::PrettyConfig;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -11,16 +11,40 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const MIN_SIZE: u64 = 100 * 1024 * 1024;
 
-#[derive(Parser, Debug)]
-#[command(about = "Бенчмарк PlicZip для бинарных файлов больше 100 MiB")]
+fn parse_repetitions(text: &str) -> Result<u32, String> {
+    let value = text
+        .parse::<u32>()
+        .map_err(|_| "repetitions must be a positive integer".to_owned())?;
+    if value >= 1 {
+        Ok(value)
+    } else {
+        Err("repetitions must be at least 1".to_owned())
+    }
+}
+
+#[derive(FromArgs, Debug)]
+/// бенчмарк PlicZip для бинарных файлов больше 100 MiB
 struct Args {
-    #[arg(long, value_name = "PATH")]
+    /// путь к бинарнику PlicZip.
+    #[argh(option, long = "pliczip")]
     pliczip: PathBuf,
-    #[arg(long, value_name = "PATH", required = true)]
+    /// входные файлы для benchmark.
+    #[argh(option, long = "input")]
     input: Vec<PathBuf>,
-    #[arg(long, value_name = "DIR")]
+    /// каталог для результатов.
+    #[argh(
+        option,
+        long = "output",
+        default = "PathBuf::from(\"benchmark-output\")"
+    )]
     output: PathBuf,
-    #[arg(long, default_value_t = 3, value_parser = clap::value_parser!(u32).range(1..))]
+    /// число повторений.
+    #[argh(
+        option,
+        long = "repetitions",
+        default = "3",
+        from_str_fn(parse_repetitions)
+    )]
     repetitions: u32,
 }
 
@@ -106,7 +130,7 @@ struct Report {
 }
 
 fn main() -> Result<()> {
-    let args = Args::parse();
+    let args: Args = argh::from_env();
     let pliczip = fs::canonicalize(&args.pliczip)
         .with_context(|| format!("pliczip binary not found: {}", args.pliczip.display()))?;
     if !pliczip.is_file() {
