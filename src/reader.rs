@@ -682,10 +682,12 @@ fn target_path(dest: &Path, entry: &PzEntry) -> Result<PathBuf> {
 }
 
 /// Восстанавливает время изменения и права доступа.
+// `std::fs::set_times` требует Rust 1.99, а проект поддерживает Rust 1.89.
+#[allow(deprecated)]
 fn apply_metadata(target: &Path, entry: &PzEntry, restore_mtime: bool) {
     if restore_mtime && entry.mtime > 0 {
-        let ft = filetime::FileTime::from_unix_time(entry.mtime, 0);
-        let _ = filetime::set_file_mtime(safety::native_path(target), ft);
+        let time = filetime::FileTime::from_unix_time(entry.mtime, 0);
+        let _ = filetime::set_file_times(safety::native_path(target), time, time);
     }
 
     #[cfg(unix)]
