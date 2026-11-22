@@ -1207,6 +1207,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
 
 [[package]]
+name = "density-rs"
+version = "0.16.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61cf8df069b6a076ab2c0103a66054f3cdbaee0294b7870ff1c69a166b8df06c"
+
+[[package]]
 name = "deranged"
 version = "0.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3177,6 +3183,7 @@ dependencies = [
  "chacha20poly1305",
  "ciborium",
  "clap",
+ "density-rs",
  "filetime",
  "flate2",
  "getrandom 0.2.17",

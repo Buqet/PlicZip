@@ -657,6 +657,16 @@ fn create_dialog(
     );
 
     ui.add_space(8.0);
+    ui.checkbox(&mut dlg.density, locale.text("density"));
+    if dlg.density {
+        ui.label(
+            egui::RichText::new(locale.text("density-help"))
+                .size(12.0)
+                .color(p.muted),
+        );
+    }
+
+    ui.add_space(8.0);
     ui.checkbox(&mut dlg.solid, locale.text("solid"));
 
     ui.add_space(8.0);

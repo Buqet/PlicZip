@@ -43,6 +43,8 @@ pub const DEFAULT_BLOCK_SIZE: u64 = 8 * 1024 * 1024;
 pub struct CreateOptions {
     /// Степень сжатия 0..11.
     pub level: i32,
+    /// Явный метод сжатия; `None` сохраняет выбор по уровню.
+    pub method: Option<Method>,
     /// Объединять мелкие файлы в общий solid-блок.
     pub solid: bool,
     /// Целевой размер solid-блока.
@@ -73,6 +75,7 @@ impl Default for CreateOptions {
     fn default() -> Self {
         CreateOptions {
             level: compress::DEFAULT_LEVEL,
+            method: None,
             solid: false,
             block_size: DEFAULT_BLOCK_SIZE,
             comment: String::new(),
@@ -93,6 +96,7 @@ impl std::fmt::Debug for CreateOptions {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CreateOptions")
             .field("level", &self.level)
+            .field("method", &self.method)
             .field("solid", &self.solid)
             .field("block_size", &self.block_size)
             .field("comment", &self.comment)
@@ -640,7 +644,9 @@ pub fn create(output: &Path, inputs: &[PathBuf], opts: &CreateOptions) -> Result
         "после применения фильтров нечего архивировать"
     );
 
-    let method = compress::method_for_level(opts.level);
+    let method = opts
+        .method
+        .unwrap_or_else(|| compress::method_for_level(opts.level));
     let raw_total: u64 = candidates.iter().map(|c| c.size).sum();
 
     let file_idx: Vec<usize> = candidates

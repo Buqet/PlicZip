@@ -35,7 +35,7 @@ const PASSWORD_ENV: &str = "PLICZIP_PASSWORD";
     version,
     about = "PlicZip — архиватор с собственным форматом .plz",
     long_about = "PlicZip упаковывает файлы и каталоги в контейнер .plz.\n\
-                  Внутри: индекс в конце файла, сжатие deflate/brotli, BLAKE3\n\
+                  Внутри: индекс в конце файла, сжатие deflate/brotli/density, BLAKE3\n\
                   на каждый файл и блок, шифрование паролем и многотомные архивы.",
     disable_help_subcommand = true,
     after_help = "Пароль не обязательно указывать в команде:\n  \
@@ -79,6 +79,10 @@ enum Cmd {
         /// Степень сжатия: 0 — без сжатия, 1..4 — deflate, 5..11 — brotli.
         #[arg(short = 'x', long = "level", value_name = "N", default_value_t = DEFAULT_LEVEL, value_parser = clap::value_parser!(i32).range(0..=11))]
         level: i32,
+
+        /// Использовать Density (Lion) вместо метода, выбранного уровнем.
+        #[arg(long)]
+        density: bool,
 
         /// Склеивать мелкие файлы в общие solid-блоки.
         #[arg(short, long)]
@@ -306,6 +310,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             archive,
             inputs,
             level,
+            density,
             solid,
             block_size,
             comment,
@@ -329,6 +334,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
 
             let opts = CreateOptions {
                 level,
+                method: density.then_some(Method::Density),
                 solid,
                 block_size,
                 comment,

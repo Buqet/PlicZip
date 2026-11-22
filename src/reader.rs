@@ -327,7 +327,7 @@ impl Archive {
                 .with_context(|| format!("блок {}", bi))?;
 
             let payload = self.block_stream(bi)?;
-            let mut stream = compress::decompress_stream(block.method, payload)?;
+            let mut stream = compress::decompress_stream(block.method, payload, block.size)?;
             let mut block_hasher = blake3::Hasher::new();
             let mut pos = 0u64;
 
@@ -553,7 +553,7 @@ impl Archive {
                 .with_context(|| format!("блок {}", bi))?;
 
             let payload = self.block_stream(bi)?;
-            let mut stream = compress::decompress_stream(block.method, payload)?;
+            let mut stream = compress::decompress_stream(block.method, payload, block.size)?;
             let mut block_hasher = blake3::Hasher::new();
             let mut pos = 0u64;
 

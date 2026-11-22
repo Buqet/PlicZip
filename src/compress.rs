@@ -1,9 +1,12 @@
 //! Слой сжатия: выбор метода по степени и потоковые обёртки.
 
 use anyhow::{ensure, Context, Result};
-use std::io::{self, Read, Write};
+use std::io::{self, Cursor, Read, Write};
 
 use crate::format::Method;
+
+use density_rs::algorithms::lion::lion::Lion;
+use density_rs::codec::codec::Codec;
 
 /// Степень сжатия по умолчанию.
 pub const DEFAULT_LEVEL: i32 = 5;
@@ -71,6 +74,21 @@ pub fn compress_stream<R: Read, W: Write>(
             io::copy(input, &mut encoder).context("ошибка сжатия brotli")?;
             encoder.flush().context("ошибка завершения brotli")?;
         }
+        Method::Density => {
+            // Density работает с целым буфером, поэтому здесь читается один
+            // логический блок. Размер блока ограничен writer::INMEM_LIMIT для
+            // параллельного пути, а для больших файлов это осознанный trade-off.
+            let mut raw = Vec::new();
+            input
+                .read_to_end(&mut raw)
+                .context("ошибка чтения блока для density")?;
+            let mut encoded = vec![0u8; Lion::safe_encode_buffer_size(raw.len())];
+            let encoded_size = Lion::encode(&raw, &mut encoded)
+                .map_err(|err| anyhow::anyhow!("ошибка сжатия density: {err:?}"))?;
+            output
+                .write_all(&encoded[..encoded_size])
+                .context("ошибка записи density")?;
+        }
         Method::Other => anyhow::bail!("неподдерживаемый метод сжатия"),
     }
     Ok(())
@@ -80,11 +98,31 @@ pub fn compress_stream<R: Read, W: Write>(
 pub fn decompress_stream<'a>(
     method: Method,
     payload: Box<dyn Read + 'a>,
+    expected_size: u64,
 ) -> Result<Box<dyn Read + 'a>> {
     match method {
         Method::Store => Ok(payload),
         Method::Deflate => Ok(Box::new(flate2::read::DeflateDecoder::new(payload))),
         Method::Brotli => Ok(Box::new(brotli::Decompressor::new(payload, 64 * 1024))),
+        Method::Density => {
+            let expected_size = usize::try_from(expected_size)
+                .context("размер density-блока не помещается в адресное пространство")?;
+            let mut encoded = Vec::new();
+            payload
+                .take(u64::MAX)
+                .read_to_end(&mut encoded)
+                .context("ошибка чтения density-блока")?;
+            let mut decoded = vec![0u8; expected_size];
+            let decoded_size = Lion::decode(&encoded, &mut decoded)
+                .map_err(|err| anyhow::anyhow!("ошибка распаковки density: {err:?}"))?;
+            ensure!(
+                decoded_size == expected_size,
+                "density распаковал {} байт вместо {}",
+                decoded_size,
+                expected_size
+            );
+            Ok(Box::new(Cursor::new(decoded)))
+        }
         Method::Other => anyhow::bail!("неподдерживаемый метод сжатия"),
     }
 }
@@ -120,5 +158,27 @@ impl<R: Read> Read for HashingReader<R> {
             self.bytes = self.bytes.saturating_add(read as u64);
         }
         Ok(read)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn density_roundtrip() {
+        let input = b"PlicZip Density compression test ".repeat(4096);
+        let (packed, method) = compress_block(Method::Density, 5, &input).unwrap();
+        assert_eq!(method, Method::Density);
+
+        let mut stream = decompress_stream(
+            Method::Density,
+            Box::new(Cursor::new(packed)),
+            input.len() as u64,
+        )
+        .unwrap();
+        let mut decoded = Vec::new();
+        stream.read_to_end(&mut decoded).unwrap();
+        assert_eq!(decoded, input);
     }
 }

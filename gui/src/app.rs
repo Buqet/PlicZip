@@ -202,6 +202,7 @@ pub struct CreateDlg {
     pub sources: Vec<PathBuf>,
     pub output: String,
     pub level: i32,
+    pub density: bool,
     pub solid: bool,
     pub encrypt: bool,
     pub password: String,
@@ -912,11 +913,13 @@ impl App {
         };
         let inputs = dlg.sources.clone();
         let level = dlg.level;
+        let method = dlg.density.then_some(pliczip::format::Method::Density);
         let solid = dlg.solid;
         let comment = dlg.comment.clone();
         let (sink, tx, rx) = progress::channel_with_sink();
         let opts = CreateOptions {
             level,
+            method,
             solid,
             comment,
             password,
@@ -1321,6 +1324,7 @@ impl CreateDlg {
             sources,
             output: output.to_string_lossy().into_owned(),
             level: 5,
+            density: false,
             solid: false,
             encrypt: false,
             password: String::new(),

@@ -89,6 +89,8 @@ pub enum Method {
     Deflate,
     /// Brotli.
     Brotli,
+    /// Density (Lion).
+    Density,
     /// Метод, неизвестный этой версии читателя.
     #[serde(other)]
     Other,
@@ -101,6 +103,7 @@ impl Method {
             Method::Store => "store",
             Method::Deflate => "deflate",
             Method::Brotli => "brotli",
+            Method::Density => "density",
             Method::Other => "unknown",
         }
     }
