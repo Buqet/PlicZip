@@ -9,9 +9,58 @@ use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
 use rune::{
-    col, row, text, text_input, Align, AppSpec, Cx, El, FileDialogOptions, TextEdit, TextStyle, Tx,
+    col, row, text, text_input, Align, AppSpec, Color, Cx, El, FileDialogOptions, ScrollSpec,
+    TextEdit, TextStyle, Tx,
 };
-use rune_kit::{Button, ButtonVariant, Cell, Kit, SortDir, Table, TableColumn, TableState};
+use rune_kit::{
+    Button, ButtonVariant, Cell, Kit, PaletteFocus, PaletteSeed, SortDir, Table, TableColumn,
+    TableState,
+};
+
+static GUI_FONTS: &[&[u8]] = &[include_bytes!("../assets/Intro.otf")];
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Accent {
+    Blue,
+    Green,
+    Orange,
+}
+
+impl Accent {
+    fn color(self) -> Color {
+        let value = match self {
+            Self::Blue => "#76A9FF",
+            Self::Green => "#83C98B",
+            Self::Orange => "#F2A45D",
+        };
+        rune::color::hex(value).expect("valid hard-coded accent color")
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Blue => "Синий",
+            Self::Green => "Зелёный",
+            Self::Orange => "Оранжевый",
+        }
+    }
+}
+
+fn theme(accent: Accent) -> Kit {
+    let background = rune::color::hex("#101214").expect("valid hard-coded background color");
+    let foreground = rune::color::hex("#F1F2F3").expect("valid hard-coded foreground color");
+    let mut kit = Kit::from_palette_focus(
+        PaletteSeed {
+            bg: background,
+            fg: foreground,
+            accent: accent.color(),
+        },
+        PaletteFocus::Accent,
+    );
+    kit.c.bg_icon_button_contrast = accent.color();
+    kit.c.submit_fg = background;
+    kit.c.submit_icon = background;
+    kit
+}
 
 struct ArchiveEntry {
     id: String,
@@ -32,6 +81,7 @@ struct State {
     entries: Vec<ArchiveEntry>,
     visible: Vec<usize>,
     table: TableState,
+    accent: Accent,
     archive_path: Option<PathBuf>,
     archive_encrypted: bool,
     path_input: TextEdit,
@@ -46,6 +96,7 @@ impl Default for State {
             entries: Vec::new(),
             visible: Vec::new(),
             table: TableState::new().multi_select(true),
+            accent: Accent::Blue,
             archive_path: None,
             archive_encrypted: false,
             path_input: TextEdit::new(""),
@@ -222,20 +273,85 @@ fn kind_label(kind: EntryKind) -> &'static str {
     }
 }
 
-fn format_size(bytes: u64) -> String {
-    if bytes >= 1024 * 1024 {
-        format!("{:.1} MiB", bytes as f64 / (1024 * 1024) as f64)
-    } else if bytes >= 1024 {
-        format!("{:.1} KiB", bytes as f64 / 1024.0)
-    } else if bytes == 0 {
-        "—".to_owned()
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StatusKind {
+    Neutral,
+    Success,
+    Error,
+}
+
+fn status_kind(status: &str) -> StatusKind {
+    if status.starts_with("Ошибка")
+        || status.starts_with("Не удалось")
+        || status.starts_with("Укажите")
+        || status.starts_with("Сначала")
+    {
+        StatusKind::Error
+    } else if status.starts_with("Открыт") || status.starts_with("Распаковка завершена")
+    {
+        StatusKind::Success
     } else {
-        format!("{bytes} B")
+        StatusKind::Neutral
     }
 }
 
-fn archive_table(state: &State, cx: &mut Cx<State>) -> El {
-    let kit = Kit::neutral(cx.system_dark());
+fn format_size(bytes: u64) -> String {
+    if bytes >= 1024 * 1024 {
+        format!("{:.1} МиБ", bytes as f64 / (1024 * 1024) as f64)
+    } else if bytes >= 1024 {
+        format!("{:.1} КиБ", bytes as f64 / 1024.0)
+    } else if bytes == 0 {
+        "—".to_owned()
+    } else {
+        format!("{bytes} Б")
+    }
+}
+
+fn accent_chip(accent: Accent, selected: Accent, kit: &Kit) -> El {
+    let color = accent.color();
+    let label = accent.label();
+    Button::new(format!("Акцент {label}"))
+        .variant(if accent == selected {
+            ButtonVariant::Contrast
+        } else {
+            ButtonVariant::GhostMuted
+        })
+        .label_with(move |font, ink| {
+            row()
+                .center_y()
+                .gap(4.0)
+                .child(text("●").font(font).color(color))
+                .child(text(label).font(font).color(ink))
+        })
+        .on_press(move |state: &mut State| state.accent = accent)
+        .build(kit)
+}
+
+fn ui_color(value: &str) -> Color {
+    rune::color::hex(value).expect("valid hard-coded UI color")
+}
+
+fn metric_card(label: &str, value: String, kit: &Kit, highlighted: bool) -> El {
+    col()
+        .grow(1.0)
+        .fill(ui_color("#171A1D"))
+        .border(1.0, ui_color("#282D31"))
+        .radius(10.0)
+        .padding(12.0)
+        .gap(5.0)
+        .child(text(label).font(kit.ty.small).color(kit.c.text_muted))
+        .child(
+            text(value)
+                .font(TextStyle::new(19.0, 600.0))
+                .color(if highlighted {
+                    kit.c.text_accent
+                } else {
+                    kit.c.text_base
+                }),
+        )
+}
+
+fn archive_table(state: &State, kit: &Kit) -> El {
     let warning = kit.c.warning.fg;
 
     let table = Table::new(
@@ -244,11 +360,11 @@ fn archive_table(state: &State, cx: &mut Cx<State>) -> El {
         |state: &State| state.visible.len(),
         |state: &State, index| Cow::Borrowed(state.entries[state.visible[index]].id.as_str()),
     )
-    .name("Archive files")
+    .name("Файлы архива")
     .column(
         TableColumn::new("name", "Имя")
             .flex(2.0)
-            .min(220.0)
+            .min(120.0)
             .sortable(),
     )
     .column(
@@ -265,8 +381,8 @@ fn archive_table(state: &State, cx: &mut Cx<State>) -> El {
             .sortable(),
     )
     .column(
-        TableColumn::new("encrypted", "Защита")
-            .width(100.0)
+        TableColumn::new("encrypted", "Шифрование")
+            .width(155.0)
             .resizable(false)
             .sortable(),
     )
@@ -278,9 +394,9 @@ fn archive_table(state: &State, cx: &mut Cx<State>) -> El {
             "size" => Cell::text(format_size(entry.size)).mono(),
             "encrypted" => {
                 if state.archive_encrypted {
-                    Cell::text("Да").color(warning)
+                    Cell::text("Зашифрован").color(warning)
                 } else {
-                    Cell::text("Нет").muted()
+                    Cell::text("Не зашифрован").muted()
                 }
             }
             _ => Cell::text(""),
@@ -290,16 +406,50 @@ fn archive_table(state: &State, cx: &mut Cx<State>) -> El {
         sort_entries(state, column, direction);
     })
     .zebra(true)
-    .build(state, &kit)
+    .build(state, kit)
     .grow(1.0)
     .min_h(0.0);
 
-    col().key("archive-table").w_full().h_full().child(table)
+    col()
+        .key("archive-table")
+        .w_full()
+        .h_full()
+        .fill(ui_color("#111315"))
+        .border(1.0, ui_color("#282D31"))
+        .radius(10.0)
+        .padding(6.0)
+        .child(table)
 }
 
-fn view(state: &State, cx: &mut Cx<State>) -> El {
-    let kit = Kit::neutral(cx.system_dark());
+fn view(state: &State, _cx: &mut Cx<State>) -> El {
+    let mut kit = theme(state.accent);
+    let page = ui_color("#0C0E10");
+    let panel = ui_color("#141719");
+    let raised = ui_color("#1A1D20");
+    let border = ui_color("#292E32");
+    let muted = ui_color("#91989F");
+    kit.c.page = page;
+    kit.c.bg_base = panel;
+    kit.c.layer_01 = panel;
+    kit.c.layer_02 = raised;
+    kit.c.bg_button_neutral = raised;
+    kit.c.surface_base = panel;
+    kit.c.surface_weak = panel;
+    kit.c.surface_raised = raised;
+    kit.c.border_base = border;
+    kit.c.border_muted = border;
+    kit.c.text_base = ui_color("#ECEFF1");
+    kit.c.text_muted = muted;
+    kit.c.text_accent = state.accent.color();
     let selected = state.table.selected_len();
+    let accent_controls = row()
+        .key("accent-controls")
+        .center_y()
+        .gap(3.0)
+        .child(accent_chip(Accent::Blue, state.accent, &kit))
+        .child(accent_chip(Accent::Green, state.accent, &kit))
+        .child(accent_chip(Accent::Orange, state.accent, &kit));
+
     let open_button = Button::new("Открыть архив")
         .variant(ButtonVariant::Contrast)
         .on_press_tx(|_state: &mut State, tx: &mut Tx| {
@@ -321,143 +471,432 @@ fn view(state: &State, cx: &mut Cx<State>) -> El {
         .variant(ButtonVariant::Neutral)
         .on_press(|state: &mut State| state.open_path_input())
         .build(&kit);
-    let path_field = text_input(&state.path_input, TextStyle::new(13.0, 400.0))
-        .key("archive-path")
-        .size(350.0, 32.0)
-        .single_line()
-        .placeholder("Путь к архиву .plz", kit.c.text_muted)
-        .on_edit(|state: &mut State| &mut state.path_input)
-        .on_submit(|state: &mut State, _| state.open_path_input());
+    let path_field = col()
+        .grow(1.0)
+        .h(38.0)
+        .center_y()
+        .fill(ui_color("#0E1012"))
+        .border(1.0, border)
+        .radius(8.0)
+        .padding(8.0)
+        .child(
+            text_input(&state.path_input, TextStyle::new(13.0, 400.0))
+                .key("archive-path")
+                .label_static("Путь к архиву .plz")
+                .w_full()
+                .h(26.0)
+                .single_line()
+                .placeholder("Путь к архиву .plz", kit.c.text_muted)
+                .on_edit(|state: &mut State| &mut state.path_input)
+                .on_submit(|state: &mut State, _| state.open_path_input()),
+        );
 
-    let extract_row = if state.archive_path.is_some() && !state.archive_encrypted {
-        row()
-            .key("extract-row")
-            .w_full()
-            .center_y()
-            .gap(8.0)
-            .child(text("Распаковать в").color(kit.c.text_muted))
-            .child(
-                text_input(&state.output_input, TextStyle::new(13.0, 400.0))
-                    .key("output-path")
-                    .size(440.0, 30.0)
-                    .single_line()
-                    .placeholder("Папка назначения", kit.c.text_muted)
-                    .on_edit(|state: &mut State| &mut state.output_input)
-                    .on_submit(|state: &mut State, _| state.extract_all()),
-            )
-            .child(
-                Button::new("Извлечь всё")
-                    .variant(ButtonVariant::Contrast)
-                    .on_press(|state: &mut State| state.extract_all())
-                    .build(&kit),
-            )
-    } else {
-        text("")
+    let status_tone = status_kind(&state.status);
+    let status_color = match status_tone {
+        StatusKind::Neutral => muted,
+        StatusKind::Success => state.accent.color(),
+        StatusKind::Error => ui_color("#FF7777"),
     };
-
-    let filter_row = if state.archive_path.is_some() {
+    let status_line =
         row()
-            .key("filter-row")
+            .key("status-line")
             .w_full()
             .center_y()
             .gap(8.0)
-            .child(text("Фильтр").color(kit.c.text_muted))
             .child(
-                text_input(&state.filter_input, TextStyle::new(13.0, 400.0))
-                    .key("archive-filter")
+                text(if status_tone == StatusKind::Error {
+                    "!"
+                } else {
+                    "●"
+                })
+                .color(status_color),
+            )
+            .child(text(&state.status).font(kit.ty.small).color(
+                if status_tone == StatusKind::Error {
+                    status_color
+                } else {
+                    kit.c.text_muted
+                },
+            ));
+
+    let source_card = col()
+        .key("source-card")
+        .w_full()
+        .fill(panel)
+        .border(1.0, border)
+        .radius(12.0)
+        .padding(14.0)
+        .gap(10.0)
+        .child(
+            row()
+                .w_full()
+                .center_y()
+                .justify_between()
+                .child(
+                    text("ИСТОЧНИК АРХИВА")
+                        .font(kit.ty.small)
+                        .color(kit.c.text_muted),
+                )
+                .child(
+                    text(state.archive_path.as_ref().map_or(
+                        "ФОРМАТ .PLZ".to_owned(),
+                        |path| {
+                            path.file_name()
+                                .map(|name| name.to_string_lossy().into_owned())
+                                .unwrap_or_else(|| path.display().to_string())
+                        },
+                    ))
+                    .font(kit.ty.mono)
+                    .color(kit.c.text_base),
+                ),
+        )
+        .child(
+            row()
+                .key("toolbar")
+                .w_full()
+                .center_y()
+                .gap(9.0)
+                .child(open_button)
+                .child(path_field)
+                .child(load_button),
+        )
+        .child(status_line);
+
+    let metrics = row()
+        .key("archive-metrics")
+        .w_full()
+        .gap(9.0)
+        .child(metric_card(
+            "ЗАПИСЕЙ В АРХИВЕ",
+            state.entries.len().to_string(),
+            &kit,
+            false,
+        ))
+        .child(metric_card(
+            "ПОСЛЕ ФИЛЬТРА",
+            format!("{} / {}", state.visible.len(), state.entries.len()),
+            &kit,
+            false,
+        ))
+        .child(metric_card(
+            "ВЫБРАНО",
+            selected.to_string(),
+            &kit,
+            selected > 0,
+        ))
+        .child(metric_card(
+            "СОСТОЯНИЕ ЗАЩИТЫ",
+            if state.archive_path.is_none() {
+                "—".to_owned()
+            } else if state.archive_encrypted {
+                "Включена".to_owned()
+            } else {
+                "Не зашифрован".to_owned()
+            },
+            &kit,
+            state.archive_encrypted,
+        ));
+
+    let extract_card = if state.archive_path.is_some() && !state.archive_encrypted {
+        col()
+            .key("extract-card")
+            .w_full()
+            .fill(panel)
+            .border(1.0, border)
+            .radius(12.0)
+            .padding(13.0)
+            .gap(9.0)
+            .child(
+                text("РАСПАКОВКА")
+                    .font(kit.ty.small)
+                    .color(kit.c.text_muted),
+            )
+            .child(
+                row()
+                    .key("extract-row")
                     .w_full()
-                    .size(400.0, 30.0)
-                    .single_line()
-                    .placeholder("Имя или часть пути", kit.c.text_muted)
-                    .on_edit(|state: &mut State| &mut state.filter_input)
-                    .on_input_change(|state: &mut State, _| state.refresh_visible())
-                    .on_submit(|state: &mut State, _| state.refresh_visible()),
+                    .center_y()
+                    .gap(9.0)
+                    .child(
+                        col()
+                            .grow(1.0)
+                            .h(38.0)
+                            .center_y()
+                            .fill(ui_color("#0E1012"))
+                            .border(1.0, border)
+                            .radius(8.0)
+                            .padding(8.0)
+                            .child(
+                                text_input(&state.output_input, TextStyle::new(13.0, 400.0))
+                                    .key("output-path")
+                                    .label_static("Папка для распаковки")
+                                    .w_full()
+                                    .h(26.0)
+                                    .single_line()
+                                    .placeholder("Папка назначения", kit.c.text_muted)
+                                    .on_edit(|state: &mut State| &mut state.output_input)
+                                    .on_submit(|state: &mut State, _| state.extract_all()),
+                            ),
+                    )
+                    .child(
+                        Button::new("Извлечь всё")
+                            .variant(ButtonVariant::Neutral)
+                            .on_press(|state: &mut State| state.extract_all())
+                            .build(&kit),
+                    ),
             )
     } else {
         text("")
     };
 
     let table_area = if state.archive_path.is_some() && !state.visible.is_empty() {
-        archive_table(state, cx)
+        archive_table(state, &kit)
     } else {
-        let hint = if state.archive_path.is_some() {
-            if state.entries.is_empty() {
-                "Архив не содержит записей"
-            } else {
-                "По запросу ничего не найдено"
-            }
+        let (symbol, hint, detail) = if state.archive_path.is_some() && state.entries.is_empty() {
+            ("□", "Архив пуст", "В выбранном архиве нет записей")
+        } else if state.archive_path.is_some() {
+            (
+                "⌕",
+                "Ничего не найдено",
+                "Измените запрос поиска, чтобы найти нужную запись",
+            )
         } else {
-            "Содержимое архива появится здесь"
+            (
+                "P",
+                "Архив не открыт",
+                "Выберите файл .plz — его содержимое появится здесь",
+            )
         };
         col()
             .key("empty-state")
             .w_full()
             .grow(1.0)
-            .center_y()
-            .child(text(hint))
+            .min_h(0.0)
+            .center()
+            .gap(8.0)
+            .child(
+                text(symbol)
+                    .font(TextStyle::new(34.0, 600.0))
+                    .color(state.accent.color()),
+            )
+            .child(
+                text(hint)
+                    .font(TextStyle::new(17.0, 600.0))
+                    .color(kit.c.text_base),
+            )
+            .child(text(detail).font(kit.ty.small).color(kit.c.text_muted))
     };
 
-    col()
-        .key("root")
+    let library_card = col()
+        .key("library-card")
         .w_full()
-        .h_full()
-        .fill(kit.c.page)
+        .grow(1.0)
+        .min_h(0.0)
+        .fill(panel)
+        .border(1.0, border)
+        .radius(12.0)
         .padding(12.0)
-        .gap(8.0)
+        .gap(10.0)
         .child(
-            row()
-                .key("toolbar")
+            col()
                 .w_full()
-                .center_y()
-                .gap(8.0)
-                .child(open_button)
-                .child(path_field)
-                .child(load_button)
+                .gap(9.0)
                 .child(
-                    text(state.archive_path.as_ref().map_or(
-                        "PlicZip Rune preview".to_owned(),
-                        |p| {
-                            p.file_name()
-                                .map(|name| name.to_string_lossy().into_owned())
-                                .unwrap_or_else(|| p.display().to_string())
-                        },
-                    ))
-                    .font(kit.ty.ui_medium)
-                    .color(kit.c.text_base),
+                    col()
+                        .gap(2.0)
+                        .child(
+                            text("Содержимое архива")
+                                .font(kit.ty.body_medium)
+                                .color(kit.c.text_base),
+                        )
+                        .child(
+                            text("Просмотр структуры и свойств записей")
+                                .font(kit.ty.small)
+                                .color(kit.c.text_muted),
+                        ),
+                )
+                .child(
+                    row()
+                        .w_full()
+                        .center_y()
+                        .gap(7.0)
+                        .child(text("ПОИСК").font(kit.ty.small).color(kit.c.text_muted))
+                        .child(
+                            col()
+                                .w(190.0)
+                                .min_w(0.0)
+                                .h(38.0)
+                                .center_y()
+                                .fill(ui_color("#0E1012"))
+                                .border(1.0, border)
+                                .radius(8.0)
+                                .padding(8.0)
+                                .child(
+                                    text_input(&state.filter_input, TextStyle::new(13.0, 400.0))
+                                        .key("archive-filter")
+                                        .label_static("Поиск по имени или пути")
+                                        .w_full()
+                                        .h(26.0)
+                                        .single_line()
+                                        .placeholder("Имя или часть пути", kit.c.text_muted)
+                                        .on_edit(|state: &mut State| &mut state.filter_input)
+                                        .on_input_change(|state: &mut State, _| {
+                                            state.refresh_visible()
+                                        })
+                                        .on_submit(|state: &mut State, _| state.refresh_visible()),
+                                ),
+                        ),
                 ),
         )
-        .child(text(&state.status).color(kit.c.text_muted))
-        .child(extract_row)
-        .child(filter_row)
+        .child(
+            row()
+                .key("table-meta")
+                .w_full()
+                .center_y()
+                .justify_between()
+                .child(
+                    text(if state.archive_path.is_some() {
+                        "ИМЯ · ТИП · РАЗМЕР · ШИФРОВАНИЕ"
+                    } else {
+                        "ГОТОВО К ПРОСМОТРУ"
+                    })
+                    .font(kit.ty.small)
+                    .color(kit.c.text_muted),
+                )
+                .child(
+                    text(format!("{} записей", state.visible.len()))
+                        .font(kit.ty.small)
+                        .color(kit.c.text_muted),
+                ),
+        )
         .child(
             col()
                 .key("table-frame")
                 .w_full()
                 .grow(1.0)
                 .min_h(0.0)
+                .fill(ui_color("#111315"))
+                .radius(10.0)
+                .border(1.0, border)
                 .child(table_area),
+        );
+
+    let footer = row()
+        .key("status-footer")
+        .w_full()
+        .center_y()
+        .justify_between()
+        .child(
+            text("PLICZIP · РАБОЧЕЕ ПРОСТРАНСТВО АРХИВОВ")
+                .font(kit.ty.small)
+                .color(kit.c.text_muted),
         )
         .child(
-            row().key("status").w_full().child(
-                text(format!(
-                    "{} из {} объектов · {} выбрано",
-                    state.visible.len(),
-                    state.entries.len(),
-                    selected
-                ))
-                .font(kit.ty.text_small)
-                .color(kit.c.text_muted),
-            ),
+            text(format!(
+                "{} из {} · {} выбрано",
+                state.visible.len(),
+                state.entries.len(),
+                selected
+            ))
+            .font(kit.ty.small)
+            .color(kit.c.text_muted),
+        );
+
+    col()
+        .key("root")
+        .w_full()
+        .h_full()
+        .min_h(0.0)
+        .scroll(ScrollSpec {
+            stick_bottom: false,
+        })
+        .fill(page)
+        .child(
+            col()
+                .key("main-content")
+                .w_full()
+                .grow(1.0)
+                .h_full()
+                .padding(16.0)
+                .gap(10.0)
+                .child(
+                    row()
+                        .key("app-brand")
+                        .w_full()
+                        .center_y()
+                        .gap(10.0)
+                        .child(
+                            col()
+                                .size(34.0, 34.0)
+                                .center()
+                                .fill(state.accent.color())
+                                .radius(10.0)
+                                .child(text("P").font(TextStyle::new(17.0, 700.0)).color(page)),
+                        )
+                        .child(
+                            col()
+                                .gap(1.0)
+                                .child(
+                                    text("PlicZip")
+                                        .font(TextStyle::new(16.0, 650.0))
+                                        .color(kit.c.text_base),
+                                )
+                                .child(
+                                    text("АРХИВНАЯ СТУДИЯ · ФОРМАТ .PLZ")
+                                        .font(kit.ty.small)
+                                        .color(kit.c.text_muted),
+                                ),
+                        ),
+                )
+                .child(
+                    col()
+                        .key("main-header")
+                        .w_full()
+                        .gap(8.0)
+                        .child(
+                            col()
+                                .gap(3.0)
+                                .child(
+                                    text("Библиотека архивов")
+                                        .font(TextStyle::new(25.0, 650.0))
+                                        .color(kit.c.text_base),
+                                )
+                                .child(
+                                    text("Управляйте содержимым PlicZip в одном месте")
+                                        .font(kit.ty.small)
+                                        .color(kit.c.text_muted),
+                                ),
+                        )
+                        .child(
+                            col()
+                                .gap(5.0)
+                                .child(
+                                    text("ЦВЕТОВОЙ АКЦЕНТ")
+                                        .font(kit.ty.small)
+                                        .color(kit.c.text_muted),
+                                )
+                                .child(accent_controls),
+                        ),
+                )
+                .child(source_card)
+                .child(metrics)
+                .child(extract_card)
+                .child(library_card)
+                .child(footer),
         )
 }
 
 fn main() {
-    rune::run(AppSpec::new(
-        "PlicZip Rune Preview",
-        (900.0, 600.0),
+    let mut spec = AppSpec::new(
+        "PlicZip · Предпросмотр Rune",
+        (1180.0, 960.0),
         State::default,
         view,
-    ));
+    );
+    spec.min_size = Some((700.0, 760.0));
+    spec.fonts = GUI_FONTS;
+    spec.families = ("Intro", "ui-monospace");
+    rune::run(spec);
 }
 
 #[cfg(test)]
@@ -465,6 +904,20 @@ mod tests {
     use super::*;
     use pliczip::prelude::CreateOptions;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn status_tone_distinguishes_errors_and_success() {
+        assert_eq!(status_kind("Не удалось открыть архив"), StatusKind::Error);
+        assert_eq!(status_kind("Ошибка распаковки"), StatusKind::Error);
+        assert_eq!(
+            status_kind("Открыт sample.plz · 3 объектов"),
+            StatusKind::Success
+        );
+        assert_eq!(
+            status_kind("Выберите архив .plz для просмотра его содержимого"),
+            StatusKind::Neutral
+        );
+    }
 
     #[test]
     fn opens_native_archive_and_populates_table_rows() {
