@@ -3646,6 +3646,7 @@ dependencies = [
 name = "pliczip-gui-rune"
 version = "0.1.0"
 dependencies = [
+ "pliczip",
  "rune",
  "rune-kit",
 ]
@@ -4152,6 +4153,7 @@ dependencies = [
  "png 0.18.1",
  "pollster 1.0.3",
  "raw-window-handle",
+ "rfd",
  "rune-core",
  "rune-edit",
  "rune-gpu",
