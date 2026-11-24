@@ -10,6 +10,7 @@ resolver = "2"
 parley_engine = { path = "vendor/rune-parley_engine" }
 winit = { path = "vendor/rune-winit" }
 sctk-adwaita = { path = "vendor/rune-sctk-adwaita" }
+wgpu-hal = { path = "vendor/rune-wgpu-hal" }
 
 [package]
 name = "pliczip"
