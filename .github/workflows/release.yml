@@ -96,7 +96,7 @@ jobs:
       - name: Сборка
         env:
           PLICZIP_RELEASE_TAG: ${{ env.TAG }}
-        run: cargo build --release --locked --target ${{ matrix.target }} -p pliczip -p pliczip-gui
+        run: cargo build --release --locked --target ${{ matrix.target }} -p pliczip -p pliczip-gui -p pliczip-gui-rune
 
       - name: Упаковка
         shell: bash
@@ -105,13 +105,17 @@ jobs:
           bin="target/${{ matrix.target }}/release"
           ext=""
           [ "$RUNNER_OS" = "Windows" ] && ext=".exe"
+          gui_bin="$bin/pliczip-gui$ext"
+          if [[ "$TAG" == *-rune-* ]]; then
+            gui_bin="$bin/pliczip-gui-rune$ext"
+          fi
           mkdir "$name"
-          cp "$bin/pliczip$ext" "$bin/pliczip-gui$ext" README.md LICENSE "$name/"
+          cp "$bin/pliczip$ext" "$gui_bin" README.md LICENSE "$name/"
           if [ "$RUNNER_OS" = "Windows" ]; then
             # The GUI is the normal Windows entry point. Keep the old names
             # for compatibility, but provide unambiguous names for users who
             # simply open the first executable in the downloaded archive.
-            cp "$bin/pliczip-gui$ext" "$name/PlicZip$ext"
+            cp "$gui_bin" "$name/PlicZip$ext"
             cp "$bin/pliczip$ext" "$name/pliczip-cli$ext"
             printf '%s\n' \
               'PlicZip Windows package' \
@@ -126,7 +130,7 @@ jobs:
             7z a -bd "$asset" "$name" >/dev/null
             rm -rf installer/assets
             mkdir -p installer/assets
-            cp "$bin/pliczip-gui$ext" installer/assets/PlicZip.exe
+            cp "$gui_bin" installer/assets/PlicZip.exe
             cp "$bin/pliczip$ext" installer/assets/pliczip-cli.exe
             cp LICENSE installer/assets/LICENSE
           else

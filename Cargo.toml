@@ -1,7 +1,15 @@
 [workspace]
-members = ["gui"]
+members = ["gui", "gui-rune"]
 exclude = ["fuzz", "installer"]
 resolver = "2"
+
+# Rune пока подключается из Git и использует upstream vendor-патч для
+# parley_engine. Повторяем только необходимый патч для pinned Rune revision;
+# основной egui GUI от этого не зависит.
+[patch.crates-io]
+parley_engine = { path = "vendor/rune-parley_engine" }
+winit = { path = "vendor/rune-winit" }
+sctk-adwaita = { path = "vendor/rune-sctk-adwaita" }
 
 [package]
 name = "pliczip"

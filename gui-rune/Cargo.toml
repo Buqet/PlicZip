@@ -1,0 +1,12 @@
+[package]
+name = "pliczip-gui-rune"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+description = "Экспериментальная графическая оболочка PlicZip на Rune"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+rune = { git = "https://github.com/anomalyco/rune", rev = "9d99a71f51658c55d6c46b314b2028abd644fe19" }
+rune-kit = { git = "https://github.com/anomalyco/rune", rev = "9d99a71f51658c55d6c46b314b2028abd644fe19" }
