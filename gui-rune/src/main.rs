@@ -1570,6 +1570,8 @@ fn view(state: &State, _cx: &mut Cx<State>) -> El {
 }
 
 fn main() {
+    rune::set_app_icon(include_bytes!("../../assets/pliczip-icon.png").to_vec())
+        .expect("embedded PlicZip icon must be a valid PNG");
     let mut spec = AppSpec::new(
         "PlicZip · Предпросмотр Rune",
         (1180.0, 960.0),
