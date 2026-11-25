@@ -9,15 +9,160 @@ use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
 use rune::{
-    col, row, text, text_input, Align, AppSpec, Color, Cx, El, FileDialogOptions, ScrollSpec,
-    TextEdit, TextStyle, Tx,
+    col, icon, row, text, text_input, Align, AppSpec, Color, Cx, El, Family, FileDialogOptions,
+    Icon, Pixels, ScrollSpec, TextEdit, TextStyle, Tx,
 };
 use rune_kit::{
-    Button, ButtonVariant, Cell, Kit, PaletteFocus, PaletteSeed, SortDir, Table, TableColumn,
-    TableState,
+    Button, ButtonVariant, Cell, ControlSize, IconButton, IconButtonVariant, Kit, PaletteFocus,
+    PaletteSeed, SortDir, Table, TableColumn, TableState,
 };
 
-static GUI_FONTS: &[&[u8]] = &[include_bytes!("../assets/Intro.otf")];
+static GUI_FONTS: &[&[u8]] = &[
+    include_bytes!("../assets/Intro.otf"),
+    include_bytes!("../assets/DeutschGothic.ttf"),
+];
+// Darkened high-frequency grain derived from the user's texture reference (1180 × 960).
+static DARK_GRAIN: &[u8] = include_bytes!("../assets/grain_dark_1180x960.raw");
+static SETTINGS_ICON: Icon = Icon {
+    name: "settings",
+    view: 64.0,
+    body: r#"<path d="M47.38 27.58 L53.68 28.28 L53.68 35.72 L47.38 36.42 L46 39.75 L49.96 44.7 L44.7 49.96 L39.75 46 L36.42 47.38 L35.72 53.68 L28.28 53.68 L27.58 47.38 L24.25 46 L19.3 49.96 L14.04 44.7 L18 39.75 L16.62 36.42 L10.32 35.72 L10.32 28.28 L16.62 27.58 L18 24.25 L14.04 19.3 L19.3 14.04 L24.25 18 L27.58 16.62 L28.28 10.32 L35.72 10.32 L36.42 16.62 L39.75 18 L44.7 14.04 L49.96 19.3 L46 24.25 Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><circle cx="32" cy="32" r="7" fill="none" stroke="currentColor" stroke-width="4"/>"#,
+};
+static BLAKE3_ICON: Icon = Icon {
+    name: "shield-check",
+    view: 64.0,
+    body: r#"<path d="M32 6 L54 14 V30 C54 44 44 54 32 58 C20 54 10 44 10 30 V14 Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>"#,
+};
+static BLAKE3_OK_ICON: Icon = Icon {
+    name: "shield-check-success",
+    view: 64.0,
+    body: r#"<path d="M32 6 L54 14 V30 C54 44 44 54 32 58 C20 54 10 44 10 30 V14 Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M21 32 L29 40 L43 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>"#,
+};
+static BLAKE3_ERROR_ICON: Icon = Icon {
+    name: "shield-cross-error",
+    view: 64.0,
+    body: r#"<path d="M32 6 L54 14 V30 C54 44 44 54 32 58 C20 54 10 44 10 30 V14 Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M24 24 L40 40 M40 24 L24 40" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>"#,
+};
+static APP_HANDLE: std::sync::OnceLock<rune::AppHandle<State>> = std::sync::OnceLock::new();
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ThemeMode {
+    Light,
+    Dark,
+    Cosmos,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Language {
+    English,
+    Russian,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum SettingsSection {
+    #[default]
+    General,
+    Appearance,
+    Extraction,
+    Security,
+}
+
+impl Language {
+    fn text(self, ru: &'static str, en: &'static str) -> &'static str {
+        match self {
+            Self::Russian => ru,
+            Self::English => en,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct ThemePalette {
+    page: Color,
+    panel: Color,
+    raised: Color,
+    border: Color,
+    muted: Color,
+    text: Color,
+    field: Color,
+    table: Color,
+}
+
+fn theme_palette(mode: ThemeMode) -> ThemePalette {
+    let (page, panel, raised, border, muted, text, field, table) = match mode {
+        ThemeMode::Dark => (
+            "#0C0E10", "#141719", "#1A1D20", "#292E32", "#91989F", "#ECEFF1", "#0E1012", "#111315",
+        ),
+        ThemeMode::Light => (
+            "#F1F2F0", "#FAFAF8", "#ECEEEB", "#D5D8D4", "#666D71", "#202427", "#FFFFFF", "#F5F6F4",
+        ),
+        ThemeMode::Cosmos => (
+            "#0D1020", "#15192B", "#1D2238", "#343B5A", "#A2A9C4", "#E8EBFF", "#0B0E1B", "#101426",
+        ),
+    };
+    ThemePalette {
+        page: ui_color(page),
+        panel: ui_color(panel),
+        raised: ui_color(raised),
+        border: ui_color(border),
+        muted: ui_color(muted),
+        text: ui_color(text),
+        field: ui_color(field),
+        table: ui_color(table),
+    }
+}
+
+fn grain_texture(mode: ThemeMode) -> &'static Pixels {
+    static GRAINS: std::sync::LazyLock<[Pixels; 3]> = std::sync::LazyLock::new(|| {
+        std::array::from_fn(|index| {
+            let pixels = Pixels::new();
+            let mut rgba = Vec::with_capacity(1180 * 960 * 4);
+            for &shade in DARK_GRAIN.iter() {
+                let rgb = match index {
+                    0 => {
+                        let light = 255 - (shade.saturating_sub(8) / 2);
+                        [light, light, light]
+                    }
+                    1 => [shade, shade, shade],
+                    _ => [shade.saturating_sub(2), shade, shade.saturating_add(7)],
+                };
+                rgba.extend_from_slice(&[rgb[0], rgb[1], rgb[2], 255]);
+            }
+            pixels.set(1180, 960, rgba);
+            pixels
+        })
+    });
+    &GRAINS[match mode {
+        ThemeMode::Light => 0,
+        ThemeMode::Dark => 1,
+        ThemeMode::Cosmos => 2,
+    }]
+}
+
+fn settings_grain_texture(mode: ThemeMode) -> &'static Pixels {
+    static GRAINS: std::sync::LazyLock<[Pixels; 3]> = std::sync::LazyLock::new(|| {
+        std::array::from_fn(|index| {
+            let pixels = Pixels::new();
+            let mut rgba = Vec::with_capacity(1180 * 960 * 4);
+            for &shade in DARK_GRAIN.iter() {
+                let variance = shade.saturating_sub(8);
+                let (rgb, alpha) = match index {
+                    0 => ([218, 221, 218], 25 + variance.saturating_mul(2)),
+                    1 => ([166, 176, 184], 24 + variance.saturating_mul(2)),
+                    _ => ([145, 160, 220], 25 + variance.saturating_mul(2)),
+                };
+                rgba.extend_from_slice(&[rgb[0], rgb[1], rgb[2], alpha]);
+            }
+            pixels.set(1180, 960, rgba);
+            pixels
+        })
+    });
+    &GRAINS[match mode {
+        ThemeMode::Light => 0,
+        ThemeMode::Dark => 1,
+        ThemeMode::Cosmos => 2,
+    }]
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Accent {
@@ -36,29 +181,28 @@ impl Accent {
         rune::color::hex(value).expect("valid hard-coded accent color")
     }
 
-    fn label(self) -> &'static str {
+    fn label(self, language: Language) -> &'static str {
         match self {
-            Self::Blue => "Синий",
-            Self::Green => "Зелёный",
-            Self::Orange => "Оранжевый",
+            Self::Blue => language.text("Синий", "Blue"),
+            Self::Green => language.text("Зелёный", "Green"),
+            Self::Orange => language.text("Оранжевый", "Orange"),
         }
     }
 }
 
-fn theme(accent: Accent) -> Kit {
-    let background = rune::color::hex("#101214").expect("valid hard-coded background color");
-    let foreground = rune::color::hex("#F1F2F3").expect("valid hard-coded foreground color");
+fn theme(accent: Accent, mode: ThemeMode) -> Kit {
+    let palette = theme_palette(mode);
     let mut kit = Kit::from_palette_focus(
         PaletteSeed {
-            bg: background,
-            fg: foreground,
+            bg: palette.page,
+            fg: palette.text,
             accent: accent.color(),
         },
         PaletteFocus::Accent,
     );
     kit.c.bg_icon_button_contrast = accent.color();
-    kit.c.submit_fg = background;
-    kit.c.submit_icon = background;
+    kit.c.submit_fg = ui_color("#101214");
+    kit.c.submit_icon = ui_color("#101214");
     kit
 }
 
@@ -82,12 +226,23 @@ struct State {
     visible: Vec<usize>,
     table: TableState,
     accent: Accent,
+    theme_mode: ThemeMode,
+    language: Language,
+    auto_verify: bool,
+    animations_enabled: bool,
+    settings_section: SettingsSection,
     archive_path: Option<PathBuf>,
     archive_encrypted: bool,
     path_input: TextEdit,
     output_input: TextEdit,
     filter_input: TextEdit,
     status: String,
+    settings_open: bool,
+    verify_running: bool,
+    verify_success: bool,
+    verify_failed: bool,
+    verify_generation: u64,
+    shield_hover: bool,
 }
 
 impl Default for State {
@@ -97,12 +252,23 @@ impl Default for State {
             visible: Vec::new(),
             table: TableState::new().multi_select(true),
             accent: Accent::Blue,
+            theme_mode: ThemeMode::Dark,
+            language: Language::Russian,
+            auto_verify: false,
+            animations_enabled: true,
+            settings_section: SettingsSection::General,
             archive_path: None,
             archive_encrypted: false,
             path_input: TextEdit::new(""),
             output_input: TextEdit::new(""),
             filter_input: TextEdit::new(""),
             status: "Выберите архив .plz для просмотра его содержимого".to_owned(),
+            settings_open: false,
+            verify_running: false,
+            verify_success: false,
+            verify_failed: false,
+            verify_generation: 0,
+            shield_hover: false,
         }
     }
 }
@@ -137,6 +303,60 @@ impl State {
             }
             Err(error) => self.status = format!("Ошибка распаковки: {error}"),
         }
+    }
+
+    fn verify_blake3(&mut self) {
+        if self.verify_running {
+            return;
+        }
+        let Some(path) = self.archive_path.clone() else {
+            self.status = "Сначала откройте архив .plz".to_owned();
+            return;
+        };
+        let Some(handle) = APP_HANDLE.get().cloned() else {
+            self.status = "Не удалось запустить проверку BLAKE3".to_owned();
+            return;
+        };
+
+        self.verify_running = true;
+        self.verify_success = false;
+        self.verify_failed = false;
+        self.verify_generation = self.verify_generation.wrapping_add(1);
+        let generation = self.verify_generation;
+        self.status = "Проверка BLAKE3 файлов и блоков…".to_owned();
+        std::thread::spawn(move || {
+            let result = (|| -> Result<pliczip::reader::TestReport, String> {
+                let mut archive = pliczip::reader::Archive::open_with(&path, None)
+                    .map_err(|error| format!("{error:#}"))?;
+                archive
+                    .test(false, 100_000, None)
+                    .map_err(|error| format!("{error:#}"))
+            })();
+            handle.update(move |state, tx| {
+                if state.verify_generation != generation
+                    || state.archive_path.as_deref() != Some(path.as_path())
+                {
+                    return;
+                }
+                state.verify_running = false;
+                state.status = match result {
+                    Ok(report) => {
+                        state.verify_success = true;
+                        state.verify_failed = false;
+                        format!(
+                            "Проверка BLAKE3 пройдена · {} файлов · {} блоков",
+                            report.files, report.blocks
+                        )
+                    }
+                    Err(error) => {
+                        state.verify_success = false;
+                        state.verify_failed = true;
+                        format!("Ошибка проверки BLAKE3: {error}")
+                    }
+                };
+                tx.color_motion(rune::Spring::new(0.32, 0.0));
+            });
+        });
     }
 
     fn refresh_visible(&mut self) {
@@ -194,8 +414,15 @@ impl State {
                 self.table = TableState::new().multi_select(true);
                 self.archive_path = Some(path.clone());
                 self.archive_encrypted = encrypted;
+                self.verify_success = false;
+                self.verify_failed = false;
+                self.verify_running = false;
+                self.verify_generation = self.verify_generation.wrapping_add(1);
                 self.refresh_visible();
                 self.status = format!("Открыт {} · {count} объектов", path.display());
+                if self.auto_verify {
+                    self.verify_blake3();
+                }
             }
             Err(error) => {
                 // Keep the currently opened archive visible if the new selection is invalid.
@@ -264,12 +491,12 @@ fn kind_name(kind: EntryKind) -> &'static str {
     }
 }
 
-fn kind_label(kind: EntryKind) -> &'static str {
+fn kind_label(kind: EntryKind, language: Language) -> &'static str {
     match kind {
-        EntryKind::File => "Файл",
-        EntryKind::Directory => "Каталог",
-        EntryKind::Link => "Ссылка",
-        EntryKind::Other => "Другое",
+        EntryKind::File => language.text("Файл", "File"),
+        EntryKind::Directory => language.text("Каталог", "Folder"),
+        EntryKind::Link => language.text("Ссылка", "Link"),
+        EntryKind::Other => language.text("Другое", "Other"),
     }
 }
 
@@ -287,7 +514,9 @@ fn status_kind(status: &str) -> StatusKind {
         || status.starts_with("Сначала")
     {
         StatusKind::Error
-    } else if status.starts_with("Открыт") || status.starts_with("Распаковка завершена")
+    } else if status.starts_with("Открыт")
+        || status.starts_with("Распаковка завершена")
+        || status.starts_with("Проверка BLAKE3 пройдена")
     {
         StatusKind::Success
     } else {
@@ -295,22 +524,82 @@ fn status_kind(status: &str) -> StatusKind {
     }
 }
 
-fn format_size(bytes: u64) -> String {
+fn localized_status(status: &str, language: Language) -> String {
+    if language == Language::Russian {
+        return status.to_owned();
+    }
+    if status == "Выберите архив .plz для просмотра его содержимого"
+    {
+        return "Choose a .plz archive to view its contents".to_owned();
+    }
+    if status.starts_with("Сначала откройте архив") {
+        return "Open a .plz archive first".to_owned();
+    }
+    if status.starts_with("Укажите путь к архиву") {
+        return "Enter a path to a .plz archive".to_owned();
+    }
+    if status.starts_with("Укажите папку") {
+        return "Choose a destination folder".to_owned();
+    }
+    if status.starts_with("Проверка BLAKE3 файлов и блоков") {
+        return "Checking BLAKE3 files and blocks…".to_owned();
+    }
+    if status.starts_with("Проверка BLAKE3 пройдена") {
+        return status
+            .replace("Проверка BLAKE3 пройдена", "BLAKE3 check passed")
+            .replace("файлов", "files")
+            .replace("блоков", "blocks");
+    }
+    if let Some(rest) = status.strip_prefix("Открыт ") {
+        return format!("Opened {}", rest.replace("объектов", "items"));
+    }
+    if let Some(rest) = status.strip_prefix("Ошибка проверки BLAKE3: ") {
+        return format!("BLAKE3 verification error: {rest}");
+    }
+    if let Some(rest) = status.strip_prefix("Не удалось открыть ") {
+        return format!("Could not open {}", rest.replace(": ", ": "));
+    }
+    if status.starts_with("Ошибка") || status.starts_with("Не удалось") {
+        return format!(
+            "Error: {}",
+            status.split_once(": ").map_or(status, |(_, d)| d)
+        );
+    }
+    if status.starts_with("Распаковка завершена") {
+        return status
+            .replace("Распаковка завершена", "Extraction complete")
+            .replace("файлов", "files")
+            .replace("каталогов", "folders")
+            .replace("ссылок", "links")
+            .replace("пропущено", "skipped");
+    }
+    status.to_owned()
+}
+
+fn format_size(bytes: u64, language: Language) -> String {
     if bytes >= 1024 * 1024 {
-        format!("{:.1} МиБ", bytes as f64 / (1024 * 1024) as f64)
+        format!(
+            "{:.1} {}",
+            bytes as f64 / (1024 * 1024) as f64,
+            language.text("МиБ", "MiB")
+        )
     } else if bytes >= 1024 {
-        format!("{:.1} КиБ", bytes as f64 / 1024.0)
+        format!(
+            "{:.1} {}",
+            bytes as f64 / 1024.0,
+            language.text("КиБ", "KiB")
+        )
     } else if bytes == 0 {
         "—".to_owned()
     } else {
-        format!("{bytes} Б")
+        format!("{bytes} {}", language.text("Б", "B"))
     }
 }
 
-fn accent_chip(accent: Accent, selected: Accent, kit: &Kit) -> El {
+fn accent_chip(accent: Accent, selected: Accent, kit: &Kit, language: Language) -> El {
     let color = accent.color();
-    let label = accent.label();
-    Button::new(format!("Акцент {label}"))
+    let label = accent.label(language);
+    Button::new(format!("{} {label}", language.text("Акцент", "Accent")))
         .variant(if accent == selected {
             ButtonVariant::Contrast
         } else {
@@ -327,15 +616,64 @@ fn accent_chip(accent: Accent, selected: Accent, kit: &Kit) -> El {
         .build(kit)
 }
 
+fn setting_option(
+    label: &'static str,
+    selected: bool,
+    action: impl Fn(&mut State) + 'static,
+    kit: &Kit,
+) -> El {
+    Button::new(label)
+        .control_size(ControlSize::Small)
+        .variant(if selected {
+            ButtonVariant::Contrast
+        } else {
+            ButtonVariant::GhostMuted
+        })
+        .on_press(action)
+        .build(kit)
+}
+
+fn settings_tab(label: &'static str, section: SettingsSection, state: &State, kit: &Kit) -> El {
+    Button::new(label)
+        .control_size(ControlSize::Large)
+        .variant(if state.settings_section == section {
+            ButtonVariant::Contrast
+        } else {
+            ButtonVariant::GhostMuted
+        })
+        .on_press(move |state: &mut State| state.settings_section = section)
+        .build(kit)
+        .grow(1.0)
+}
+
+fn setting_card(title: &str, detail: &str, content: El, kit: &Kit, palette: ThemePalette) -> El {
+    col()
+        .grow(1.0)
+        .fill(palette.panel)
+        .border(1.0, palette.border)
+        .radius(0.0)
+        .padding(22.0)
+        .gap(14.0)
+        .child(text(title).font(kit.ty.body_medium).color(palette.text))
+        .child(text(detail).font(kit.ty.small).color(palette.muted))
+        .child(content)
+}
+
 fn ui_color(value: &str) -> Color {
     rune::color::hex(value).expect("valid hard-coded UI color")
 }
 
-fn metric_card(label: &str, value: String, kit: &Kit, highlighted: bool) -> El {
+fn metric_card(
+    label: &str,
+    value: String,
+    kit: &Kit,
+    highlighted: bool,
+    palette: ThemePalette,
+) -> El {
     col()
         .grow(1.0)
-        .fill(ui_color("#171A1D"))
-        .border(1.0, ui_color("#282D31"))
+        .fill(palette.panel)
+        .border(1.0, palette.border)
         .radius(10.0)
         .padding(12.0)
         .gap(5.0)
@@ -351,7 +689,28 @@ fn metric_card(label: &str, value: String, kit: &Kit, highlighted: bool) -> El {
         )
 }
 
-fn archive_table(state: &State, kit: &Kit) -> El {
+fn choose_archive(state: &mut State, tx: &mut Tx) {
+    tx.open_file(
+        FileDialogOptions {
+            title: state
+                .language
+                .text("Открыть архив PlicZip", "Open a PlicZip archive")
+                .to_owned(),
+            ..Default::default()
+        }
+        .filter(
+            state.language.text("Архив PlicZip", "PlicZip archive"),
+            &["plz"],
+        ),
+        |state: &mut State, result, _| match result {
+            Ok(Some(path)) => state.open_archive(path),
+            Ok(None) => {}
+            Err(error) => state.status = format!("Не удалось открыть диалог: {error}"),
+        },
+    );
+}
+
+fn archive_table(state: &State, kit: &Kit, palette: ThemePalette, language: Language) -> El {
     let warning = kit.c.warning.fg;
 
     let table = Table::new(
@@ -360,28 +719,28 @@ fn archive_table(state: &State, kit: &Kit) -> El {
         |state: &State| state.visible.len(),
         |state: &State, index| Cow::Borrowed(state.entries[state.visible[index]].id.as_str()),
     )
-    .name("Файлы архива")
+    .name(language.text("Файлы архива", "Archive files"))
     .column(
-        TableColumn::new("name", "Имя")
+        TableColumn::new("name", language.text("Имя", "Name"))
             .flex(2.0)
             .min(120.0)
             .sortable(),
     )
     .column(
-        TableColumn::new("type", "Тип")
+        TableColumn::new("type", language.text("Тип", "Type"))
             .width(110.0)
             .min(90.0)
             .sortable(),
     )
     .column(
-        TableColumn::new("size", "Размер")
+        TableColumn::new("size", language.text("Размер", "Size"))
             .width(110.0)
             .min(80.0)
             .align(Align::End)
             .sortable(),
     )
     .column(
-        TableColumn::new("encrypted", "Шифрование")
+        TableColumn::new("encrypted", language.text("Шифрование", "Encryption"))
             .width(155.0)
             .resizable(false)
             .sortable(),
@@ -390,13 +749,13 @@ fn archive_table(state: &State, kit: &Kit) -> El {
         let entry = &state.entries[state.visible[index]];
         match column {
             "name" => Cell::text(entry.name.as_str()),
-            "type" => Cell::text(kind_label(entry.kind)).muted(),
-            "size" => Cell::text(format_size(entry.size)).mono(),
+            "type" => Cell::text(kind_label(entry.kind, language)).muted(),
+            "size" => Cell::text(format_size(entry.size, language)).mono(),
             "encrypted" => {
                 if state.archive_encrypted {
-                    Cell::text("Зашифрован").color(warning)
+                    Cell::text(language.text("Зашифрован", "Encrypted")).color(warning)
                 } else {
-                    Cell::text("Не зашифрован").muted()
+                    Cell::text(language.text("Не зашифрован", "Not encrypted")).muted()
                 }
             }
             _ => Cell::text(""),
@@ -414,20 +773,22 @@ fn archive_table(state: &State, kit: &Kit) -> El {
         .key("archive-table")
         .w_full()
         .h_full()
-        .fill(ui_color("#111315"))
-        .border(1.0, ui_color("#282D31"))
+        .fill(palette.table)
+        .border(1.0, palette.border)
         .radius(10.0)
         .padding(6.0)
         .child(table)
 }
 
 fn view(state: &State, _cx: &mut Cx<State>) -> El {
-    let mut kit = theme(state.accent);
-    let page = ui_color("#0C0E10");
-    let panel = ui_color("#141719");
-    let raised = ui_color("#1A1D20");
-    let border = ui_color("#292E32");
-    let muted = ui_color("#91989F");
+    let palette = theme_palette(state.theme_mode);
+    let language = state.language;
+    let mut kit = theme(state.accent, state.theme_mode);
+    let page = palette.page;
+    let panel = palette.panel;
+    let raised = palette.raised;
+    let border = palette.border;
+    let muted = palette.muted;
     kit.c.page = page;
     kit.c.bg_base = panel;
     kit.c.layer_01 = panel;
@@ -438,36 +799,16 @@ fn view(state: &State, _cx: &mut Cx<State>) -> El {
     kit.c.surface_raised = raised;
     kit.c.border_base = border;
     kit.c.border_muted = border;
-    kit.c.text_base = ui_color("#ECEFF1");
+    kit.c.text_base = palette.text;
     kit.c.text_muted = muted;
     kit.c.text_accent = state.accent.color();
     let selected = state.table.selected_len();
-    let accent_controls = row()
-        .key("accent-controls")
-        .center_y()
-        .gap(3.0)
-        .child(accent_chip(Accent::Blue, state.accent, &kit))
-        .child(accent_chip(Accent::Green, state.accent, &kit))
-        .child(accent_chip(Accent::Orange, state.accent, &kit));
 
-    let open_button = Button::new("Открыть архив")
+    let open_button = Button::new(language.text("Открыть архив", "Open archive"))
         .variant(ButtonVariant::Contrast)
-        .on_press_tx(|_state: &mut State, tx: &mut Tx| {
-            tx.open_file(
-                FileDialogOptions {
-                    title: "Открыть архив PlicZip".to_owned(),
-                    ..Default::default()
-                }
-                .filter("Архив PlicZip", &["plz"]),
-                |state: &mut State, result, _| match result {
-                    Ok(Some(path)) => state.open_archive(path),
-                    Ok(None) => {}
-                    Err(error) => state.status = format!("Не удалось открыть диалог: {error}"),
-                },
-            );
-        })
+        .on_press_tx(choose_archive)
         .build(&kit);
-    let load_button = Button::new("Загрузить")
+    let load_button = Button::new(language.text("Загрузить", "Load"))
         .variant(ButtonVariant::Neutral)
         .on_press(|state: &mut State| state.open_path_input())
         .build(&kit);
@@ -475,18 +816,21 @@ fn view(state: &State, _cx: &mut Cx<State>) -> El {
         .grow(1.0)
         .h(38.0)
         .center_y()
-        .fill(ui_color("#0E1012"))
+        .fill(palette.field)
         .border(1.0, border)
         .radius(8.0)
         .padding(8.0)
         .child(
             text_input(&state.path_input, TextStyle::new(13.0, 400.0))
                 .key("archive-path")
-                .label_static("Путь к архиву .plz")
+                .label_static(language.text("Путь к архиву .plz", "Path to .plz archive"))
                 .w_full()
                 .h(26.0)
                 .single_line()
-                .placeholder("Путь к архиву .plz", kit.c.text_muted)
+                .placeholder(
+                    language.text("Путь к архиву .plz", "Path to .plz archive"),
+                    kit.c.text_muted,
+                )
                 .on_edit(|state: &mut State| &mut state.path_input)
                 .on_submit(|state: &mut State, _| state.open_path_input()),
         );
@@ -497,27 +841,27 @@ fn view(state: &State, _cx: &mut Cx<State>) -> El {
         StatusKind::Success => state.accent.color(),
         StatusKind::Error => ui_color("#FF7777"),
     };
-    let status_line =
-        row()
-            .key("status-line")
-            .w_full()
-            .center_y()
-            .gap(8.0)
-            .child(
-                text(if status_tone == StatusKind::Error {
-                    "!"
-                } else {
-                    "●"
-                })
-                .color(status_color),
-            )
-            .child(text(&state.status).font(kit.ty.small).color(
-                if status_tone == StatusKind::Error {
-                    status_color
-                } else {
-                    kit.c.text_muted
-                },
-            ));
+    let displayed_status = localized_status(&state.status, language);
+    let status_line = row()
+        .key("status-line")
+        .w_full()
+        .center_y()
+        .gap(8.0)
+        .child(
+            text(if status_tone == StatusKind::Error {
+                "!"
+            } else {
+                "●"
+            })
+            .color(status_color),
+        )
+        .child(text(displayed_status).font(kit.ty.small).color(
+            if status_tone == StatusKind::Error {
+                status_color
+            } else {
+                kit.c.text_muted
+            },
+        ));
 
     let source_card = col()
         .key("source-card")
@@ -533,13 +877,13 @@ fn view(state: &State, _cx: &mut Cx<State>) -> El {
                 .center_y()
                 .justify_between()
                 .child(
-                    text("ИСТОЧНИК АРХИВА")
+                    text(language.text("ИСТОЧНИК АРХИВА", "ARCHIVE SOURCE"))
                         .font(kit.ty.small)
                         .color(kit.c.text_muted),
                 )
                 .child(
                     text(state.archive_path.as_ref().map_or(
-                        "ФОРМАТ .PLZ".to_owned(),
+                        language.text("ФОРМАТ .PLZ", "FORMAT .PLZ").to_owned(),
                         |path| {
                             path.file_name()
                                 .map(|name| name.to_string_lossy().into_owned())
@@ -567,34 +911,38 @@ fn view(state: &State, _cx: &mut Cx<State>) -> El {
         .w_full()
         .gap(9.0)
         .child(metric_card(
-            "ЗАПИСЕЙ В АРХИВЕ",
+            language.text("ЗАПИСЕЙ В АРХИВЕ", "ARCHIVE ENTRIES"),
             state.entries.len().to_string(),
             &kit,
             false,
+            palette,
         ))
         .child(metric_card(
-            "ПОСЛЕ ФИЛЬТРА",
+            language.text("ПОСЛЕ ФИЛЬТРА", "AFTER FILTER"),
             format!("{} / {}", state.visible.len(), state.entries.len()),
             &kit,
             false,
+            palette,
         ))
         .child(metric_card(
-            "ВЫБРАНО",
+            language.text("ВЫБРАНО", "SELECTED"),
             selected.to_string(),
             &kit,
             selected > 0,
+            palette,
         ))
         .child(metric_card(
-            "СОСТОЯНИЕ ЗАЩИТЫ",
+            language.text("СОСТОЯНИЕ ЗАЩИТЫ", "PROTECTION"),
             if state.archive_path.is_none() {
                 "—".to_owned()
             } else if state.archive_encrypted {
-                "Включена".to_owned()
+                language.text("Включена", "Enabled").to_owned()
             } else {
-                "Не зашифрован".to_owned()
+                language.text("Не зашифрован", "Not encrypted").to_owned()
             },
             &kit,
             state.archive_encrypted,
+            palette,
         ));
 
     let extract_card = if state.archive_path.is_some() && !state.archive_encrypted {
@@ -607,7 +955,7 @@ fn view(state: &State, _cx: &mut Cx<State>) -> El {
             .padding(13.0)
             .gap(9.0)
             .child(
-                text("РАСПАКОВКА")
+                text(language.text("РАСПАКОВКА", "EXTRACTION"))
                     .font(kit.ty.small)
                     .color(kit.c.text_muted),
             )
@@ -622,24 +970,29 @@ fn view(state: &State, _cx: &mut Cx<State>) -> El {
                             .grow(1.0)
                             .h(38.0)
                             .center_y()
-                            .fill(ui_color("#0E1012"))
+                            .fill(palette.field)
                             .border(1.0, border)
                             .radius(8.0)
                             .padding(8.0)
                             .child(
                                 text_input(&state.output_input, TextStyle::new(13.0, 400.0))
                                     .key("output-path")
-                                    .label_static("Папка для распаковки")
+                                    .label_static(
+                                        language.text("Папка для распаковки", "Extraction folder"),
+                                    )
                                     .w_full()
                                     .h(26.0)
                                     .single_line()
-                                    .placeholder("Папка назначения", kit.c.text_muted)
+                                    .placeholder(
+                                        language.text("Папка назначения", "Destination folder"),
+                                        kit.c.text_muted,
+                                    )
                                     .on_edit(|state: &mut State| &mut state.output_input)
                                     .on_submit(|state: &mut State, _| state.extract_all()),
                             ),
                     )
                     .child(
-                        Button::new("Извлечь всё")
+                        Button::new(language.text("Извлечь всё", "Extract all"))
                             .variant(ButtonVariant::Neutral)
                             .on_press(|state: &mut State| state.extract_all())
                             .build(&kit),
@@ -650,41 +1003,79 @@ fn view(state: &State, _cx: &mut Cx<State>) -> El {
     };
 
     let table_area = if state.archive_path.is_some() && !state.visible.is_empty() {
-        archive_table(state, &kit)
+        archive_table(state, &kit, palette, language)
     } else {
         let (symbol, hint, detail) = if state.archive_path.is_some() && state.entries.is_empty() {
-            ("□", "Архив пуст", "В выбранном архиве нет записей")
+            (
+                "□",
+                language.text("Архив пуст", "Archive is empty"),
+                language.text(
+                    "В выбранном архиве нет записей",
+                    "The selected archive has no entries",
+                ),
+            )
         } else if state.archive_path.is_some() {
             (
                 "⌕",
-                "Ничего не найдено",
-                "Измените запрос поиска, чтобы найти нужную запись",
+                language.text("Ничего не найдено", "No matches found"),
+                language.text(
+                    "Измените запрос поиска, чтобы найти нужную запись",
+                    "Change your search to find an entry",
+                ),
             )
         } else {
             (
                 "P",
-                "Архив не открыт",
-                "Выберите файл .plz — его содержимое появится здесь",
+                language.text("Откройте архив PlicZip", "Open a PlicZip archive"),
+                language.text(
+                    "Выберите файл .plz, чтобы увидеть его содержимое",
+                    "Choose a .plz file to browse its contents",
+                ),
             )
         };
-        col()
+        let empty_icon = if state.archive_path.is_none() {
+            col()
+                .size(66.0, 66.0)
+                .center()
+                .fill(raised)
+                .border(1.0, border)
+                .radius(18.0)
+                .child(
+                    text(symbol)
+                        .font(TextStyle::new(38.0, 400.0).family(Family::Named("Deutsch Gothic")))
+                        .color(state.accent.color()),
+                )
+        } else {
+            col().size(54.0, 54.0).center().child(
+                text(symbol)
+                    .font(TextStyle::new(34.0, 600.0))
+                    .color(state.accent.color()),
+            )
+        };
+        let empty_state = col()
             .key("empty-state")
             .w_full()
             .grow(1.0)
             .min_h(0.0)
             .center()
-            .gap(8.0)
-            .child(
-                text(symbol)
-                    .font(TextStyle::new(34.0, 600.0))
-                    .color(state.accent.color()),
-            )
+            .gap(10.0)
+            .child(empty_icon)
             .child(
                 text(hint)
                     .font(TextStyle::new(17.0, 600.0))
                     .color(kit.c.text_base),
             )
-            .child(text(detail).font(kit.ty.small).color(kit.c.text_muted))
+            .child(text(detail).font(kit.ty.small).color(kit.c.text_muted));
+        if state.archive_path.is_none() {
+            empty_state.child(
+                Button::new(language.text("Выбрать архив", "Choose archive"))
+                    .variant(ButtonVariant::Contrast)
+                    .on_press_tx(choose_archive)
+                    .build(&kit),
+            )
+        } else {
+            empty_state
+        }
     };
 
     let library_card = col()
@@ -705,14 +1096,17 @@ fn view(state: &State, _cx: &mut Cx<State>) -> El {
                     col()
                         .gap(2.0)
                         .child(
-                            text("Содержимое архива")
+                            text(language.text("Содержимое архива", "Archive contents"))
                                 .font(kit.ty.body_medium)
                                 .color(kit.c.text_base),
                         )
                         .child(
-                            text("Просмотр структуры и свойств записей")
-                                .font(kit.ty.small)
-                                .color(kit.c.text_muted),
+                            text(language.text(
+                                "Просмотр структуры и свойств записей",
+                                "Browse entries and metadata",
+                            ))
+                            .font(kit.ty.small)
+                            .color(kit.c.text_muted),
                         ),
                 )
                 .child(
@@ -720,25 +1114,35 @@ fn view(state: &State, _cx: &mut Cx<State>) -> El {
                         .w_full()
                         .center_y()
                         .gap(7.0)
-                        .child(text("ПОИСК").font(kit.ty.small).color(kit.c.text_muted))
+                        .child(
+                            text(language.text("ПОИСК", "SEARCH"))
+                                .font(kit.ty.small)
+                                .color(kit.c.text_muted),
+                        )
                         .child(
                             col()
                                 .w(190.0)
                                 .min_w(0.0)
                                 .h(38.0)
                                 .center_y()
-                                .fill(ui_color("#0E1012"))
+                                .fill(palette.field)
                                 .border(1.0, border)
                                 .radius(8.0)
                                 .padding(8.0)
                                 .child(
                                     text_input(&state.filter_input, TextStyle::new(13.0, 400.0))
                                         .key("archive-filter")
-                                        .label_static("Поиск по имени или пути")
+                                        .label_static(language.text(
+                                            "Поиск по имени или пути",
+                                            "Search by name or path",
+                                        ))
                                         .w_full()
                                         .h(26.0)
                                         .single_line()
-                                        .placeholder("Имя или часть пути", kit.c.text_muted)
+                                        .placeholder(
+                                            language.text("Имя или часть пути", "Name or path"),
+                                            kit.c.text_muted,
+                                        )
                                         .on_edit(|state: &mut State| &mut state.filter_input)
                                         .on_input_change(|state: &mut State, _| {
                                             state.refresh_visible()
@@ -756,17 +1160,24 @@ fn view(state: &State, _cx: &mut Cx<State>) -> El {
                 .justify_between()
                 .child(
                     text(if state.archive_path.is_some() {
-                        "ИМЯ · ТИП · РАЗМЕР · ШИФРОВАНИЕ"
+                        language.text(
+                            "ИМЯ · ТИП · РАЗМЕР · ШИФРОВАНИЕ",
+                            "NAME · TYPE · SIZE · ENCRYPTION",
+                        )
                     } else {
-                        "ГОТОВО К ПРОСМОТРУ"
+                        language.text("ГОТОВО К ПРОСМОТРУ", "READY TO BROWSE")
                     })
                     .font(kit.ty.small)
                     .color(kit.c.text_muted),
                 )
                 .child(
-                    text(format!("{} записей", state.visible.len()))
-                        .font(kit.ty.small)
-                        .color(kit.c.text_muted),
+                    text(format!(
+                        "{} {}",
+                        state.visible.len(),
+                        language.text("записей", "items")
+                    ))
+                    .font(kit.ty.small)
+                    .color(kit.c.text_muted),
                 ),
         )
         .child(
@@ -775,33 +1186,375 @@ fn view(state: &State, _cx: &mut Cx<State>) -> El {
                 .w_full()
                 .grow(1.0)
                 .min_h(0.0)
-                .fill(ui_color("#111315"))
+                .fill(palette.table)
                 .radius(10.0)
                 .border(1.0, border)
                 .child(table_area),
         );
 
+    let settings_overlay = if state.settings_open {
+        let language_options = row()
+            .gap(10.0)
+            .child(setting_option(
+                "Русский",
+                state.language == Language::Russian,
+                |state| state.language = Language::Russian,
+                &kit,
+            ))
+            .child(setting_option(
+                "English",
+                state.language == Language::English,
+                |state| state.language = Language::English,
+                &kit,
+            ));
+        let theme_options = row()
+            .gap(10.0)
+            .child(setting_option(
+                language.text("Светлая", "Light"),
+                state.theme_mode == ThemeMode::Light,
+                |state| state.theme_mode = ThemeMode::Light,
+                &kit,
+            ))
+            .child(setting_option(
+                language.text("Тёмная", "Dark"),
+                state.theme_mode == ThemeMode::Dark,
+                |state| state.theme_mode = ThemeMode::Dark,
+                &kit,
+            ))
+            .child(setting_option(
+                language.text("Космос", "Cosmos"),
+                state.theme_mode == ThemeMode::Cosmos,
+                |state| state.theme_mode = ThemeMode::Cosmos,
+                &kit,
+            ));
+        let accent_options = row()
+            .gap(8.0)
+            .child(accent_chip(Accent::Blue, state.accent, &kit, language))
+            .child(accent_chip(Accent::Green, state.accent, &kit, language))
+            .child(accent_chip(Accent::Orange, state.accent, &kit, language));
+        let animations_option = row()
+            .w_full()
+            .center_y()
+            .justify_between()
+            .child(text(
+                language.text("Анимации интерфейса", "Interface animations"),
+            ))
+            .child(setting_option(
+                if state.animations_enabled {
+                    language.text("Вкл.", "On")
+                } else {
+                    language.text("Выкл.", "Off")
+                },
+                state.animations_enabled,
+                |state| state.animations_enabled = !state.animations_enabled,
+                &kit,
+            ));
+        let verify_option = row()
+            .w_full()
+            .center_y()
+            .justify_between()
+            .child(text(language.text(
+                "Проверять BLAKE3 при открытии архива",
+                "Verify BLAKE3 when opening an archive",
+            )))
+            .child(setting_option(
+                if state.auto_verify {
+                    language.text("Вкл.", "On")
+                } else {
+                    language.text("Выкл.", "Off")
+                },
+                state.auto_verify,
+                |state| state.auto_verify = !state.auto_verify,
+                &kit,
+            ));
+
+        let destination_field = col()
+            .w_full()
+            .h(52.0)
+            .center_y()
+            .fill(palette.field)
+            .border(1.0, border)
+            .padding(12.0)
+            .child(
+                text_input(&state.output_input, TextStyle::new(15.0, 400.0))
+                    .key("settings-extraction-path")
+                    .label_static(language.text("Папка назначения", "Destination folder"))
+                    .w_full()
+                    .h(30.0)
+                    .single_line()
+                    .placeholder(
+                        language.text("Например: ./extracted", "For example: ./extracted"),
+                        kit.c.text_muted,
+                    )
+                    .on_edit(|state: &mut State| &mut state.output_input),
+            );
+        let destination_section = row()
+            .w_full()
+            .grow(1.0)
+            .gap(16.0)
+            .child(setting_card(
+                language.text("ПАПКА РАСПАКОВКИ", "EXTRACTION FOLDER"),
+                language.text(
+                    "Путь, который будет подставлен для распаковки текущего архива",
+                    "Default destination path for extracting the current archive",
+                ),
+                destination_field,
+                &kit,
+                palette,
+            ))
+            .child(setting_card(
+                language.text("ТЕКУЩИЙ АРХИВ", "CURRENT ARCHIVE"),
+                language.text(
+                    "Предложенная папка назначения зависит от расположения архива",
+                    "The suggested destination follows the archive location",
+                ),
+                text(state.archive_path.as_ref().map_or_else(
+                    || {
+                        language
+                            .text("Архив ещё не открыт", "No archive is open")
+                            .to_owned()
+                    },
+                    |path| path.display().to_string(),
+                ))
+                .color(palette.text),
+                &kit,
+                palette,
+            ));
+
+        let section_content = match state.settings_section {
+            SettingsSection::General => row()
+                .w_full()
+                .grow(1.0)
+                .gap(16.0)
+                .child(setting_card(
+                    language.text("ЯЗЫК ИНТЕРФЕЙСА", "INTERFACE LANGUAGE"),
+                    language.text(
+                        "Выберите язык приложения",
+                        "Choose the application language",
+                    ),
+                    language_options,
+                    &kit,
+                    palette,
+                ))
+                .child(setting_card(
+                    language.text("АНИМАЦИИ", "ANIMATIONS"),
+                    language.text(
+                        "Включайте движения и переходы интерфейса",
+                        "Enable interface motion and transitions",
+                    ),
+                    animations_option,
+                    &kit,
+                    palette,
+                )),
+            SettingsSection::Appearance => row()
+                .w_full()
+                .grow(1.0)
+                .gap(16.0)
+                .child(setting_card(
+                    language.text("ТЕМА", "THEME"),
+                    language.text(
+                        "Зернистость сохраняется в каждой теме",
+                        "Grain remains present in every theme",
+                    ),
+                    theme_options,
+                    &kit,
+                    palette,
+                ))
+                .child(setting_card(
+                    language.text("АКЦЕНТНЫЙ ЦВЕТ", "ACCENT COLOR"),
+                    language.text(
+                        "Цвет отметок и важных состояний",
+                        "Highlights and status color",
+                    ),
+                    accent_options,
+                    &kit,
+                    palette,
+                )),
+            SettingsSection::Extraction => destination_section,
+            SettingsSection::Security => row()
+                .w_full()
+                .grow(1.0)
+                .gap(16.0)
+                .child(setting_card(
+                    language.text("ПРОВЕРКА BLAKE3", "BLAKE3 VERIFICATION"),
+                    language.text(
+                        "Автоматическая проверка целостности при открытии архива",
+                        "Automatically verify archive integrity when opening",
+                    ),
+                    col().w_full().gap(16.0).child(verify_option).child(
+                        Button::new(language.text("Проверить сейчас", "Verify now"))
+                            .variant(ButtonVariant::Neutral)
+                            .on_press(|state: &mut State| state.verify_blake3())
+                            .build(&kit),
+                    ),
+                    &kit,
+                    palette,
+                ))
+                .child(setting_card(
+                    language.text("СОСТОЯНИЕ АРХИВА", "ARCHIVE STATUS"),
+                    language.text("Текущая проверка", "Current verification"),
+                    text(localized_status(&state.status, language)).color(palette.text),
+                    &kit,
+                    palette,
+                )),
+        };
+        let tabs = row()
+            .w_full()
+            .gap(8.0)
+            .child(settings_tab(
+                language.text("Общие", "General"),
+                SettingsSection::General,
+                state,
+                &kit,
+            ))
+            .child(settings_tab(
+                language.text("Внешний вид", "Appearance"),
+                SettingsSection::Appearance,
+                state,
+                &kit,
+            ))
+            .child(settings_tab(
+                language.text("Распаковка", "Extraction"),
+                SettingsSection::Extraction,
+                state,
+                &kit,
+            ))
+            .child(settings_tab(
+                language.text("Безопасность", "Security"),
+                SettingsSection::Security,
+                state,
+                &kit,
+            ));
+
+        Some(
+            col()
+                .key("settings-overlay")
+                .absolute(0.0, 0.0)
+                .pin(Some(0.0), Some(0.0), Some(0.0), Some(0.0))
+                .fill(ui_color("#000000B8"))
+                .pixels(settings_grain_texture(state.theme_mode))
+                .padding(28.0)
+                .gap(20.0)
+                .child(
+                    row()
+                        .w_full()
+                        .center_y()
+                        .justify_between()
+                        .child(
+                            col()
+                                .gap(5.0)
+                                .child(
+                                    text(language.text("НАСТРОЙКИ", "SETTINGS"))
+                                        .font(TextStyle::new(28.0, 600.0))
+                                        .color(palette.text),
+                                )
+                                .child(
+                                    text(language.text(
+                                        "Настройте PlicZip под себя",
+                                        "Customize PlicZip to your preferences",
+                                    ))
+                                    .font(kit.ty.body)
+                                    .color(palette.muted),
+                                ),
+                        )
+                        .child(
+                            Button::new(language.text("Закрыть  ×", "Close  ×"))
+                                .variant(ButtonVariant::GhostMuted)
+                                .on_press(|state: &mut State| state.settings_open = false)
+                                .build(&kit),
+                        ),
+                )
+                .child(tabs)
+                .child(section_content),
+        )
+    } else {
+        None
+    };
+    let settings_button = IconButton::new(&SETTINGS_ICON)
+        .variant(IconButtonVariant::GhostMuted)
+        .label(language.text("Настройки", "Settings"))
+        .help(language.text("Открыть настройки", "Open settings"))
+        .expanded(state.settings_open)
+        .on_press(|state: &mut State| state.settings_open = !state.settings_open)
+        .build(&kit)
+        .key("settings-button");
+    let (shield_icon, shield_color, shield_key) = if state.verify_success {
+        (&BLAKE3_OK_ICON, ui_color("#83C98B"), "shield-ok")
+    } else if state.verify_failed {
+        (&BLAKE3_ERROR_ICON, ui_color("#E56B6F"), "shield-error")
+    } else {
+        (&BLAKE3_ICON, kit.c.text_muted, "shield-idle")
+    };
+    let animations_enabled = state.animations_enabled;
+    let shield_rotation = if state.animations_enabled && state.shield_hover {
+        0.16
+    } else {
+        0.0
+    };
+    let shield_button =
+        Button::new(language.text("Проверить целостность BLAKE3", "Verify BLAKE3 integrity"))
+            .variant(ButtonVariant::GhostMuted)
+            .control_size(ControlSize::Small)
+            .label_with(move |_font, _ink| {
+                row().center_y().child(
+                    icon(shield_icon, 14.0)
+                        .key(shield_key)
+                        .color(shield_color)
+                        .rotate(shield_rotation)
+                        .rotate_motion(rune::Spring::new(0.32, 0.0))
+                        .transition(rune::Transition::scale(if animations_enabled {
+                            0.82
+                        } else {
+                            1.0
+                        })),
+                )
+            })
+            .on_press(|state: &mut State| state.verify_blake3())
+            .build(&kit)
+            .size(20.0, 20.0)
+            .key("blake3-shield-button")
+            .on_hover_change(|state: &mut State, hovering, tx| {
+                if state.shield_hover != hovering {
+                    state.shield_hover = hovering;
+                    tx.color_motion(rune::Spring::new(0.24, 0.0));
+                }
+            });
+    let footer_actions = row()
+        .center_y()
+        .gap(5.0)
+        .child(shield_button)
+        .child(text("|").font(kit.ty.small).color(kit.c.text_muted))
+        .child(settings_button);
     let footer = row()
         .key("status-footer")
         .w_full()
         .center_y()
         .justify_between()
         .child(
-            text("PLICZIP · РАБОЧЕЕ ПРОСТРАНСТВО АРХИВОВ")
-                .font(kit.ty.small)
-                .color(kit.c.text_muted),
-        )
-        .child(
             text(format!(
-                "{} из {} · {} выбрано",
+                "{} {} · {} {}",
                 state.visible.len(),
+                language.text("из", "of"),
                 state.entries.len(),
-                selected
+                language.text("выбрано", "selected")
             ))
             .font(kit.ty.small)
             .color(kit.c.text_muted),
-        );
+        )
+        .child(footer_actions);
 
+    let main_content = col()
+        .key("main-content")
+        .w_full()
+        .grow(1.0)
+        .h_full()
+        .padding(16.0)
+        .gap(10.0)
+        .child(source_card)
+        .child(metrics)
+        .child(extract_card)
+        .child(library_card)
+        .child(footer);
     col()
         .key("root")
         .w_full()
@@ -811,79 +1564,9 @@ fn view(state: &State, _cx: &mut Cx<State>) -> El {
             stick_bottom: false,
         })
         .fill(page)
-        .child(
-            col()
-                .key("main-content")
-                .w_full()
-                .grow(1.0)
-                .h_full()
-                .padding(16.0)
-                .gap(10.0)
-                .child(
-                    row()
-                        .key("app-brand")
-                        .w_full()
-                        .center_y()
-                        .gap(10.0)
-                        .child(
-                            col()
-                                .size(34.0, 34.0)
-                                .center()
-                                .fill(state.accent.color())
-                                .radius(10.0)
-                                .child(text("P").font(TextStyle::new(17.0, 700.0)).color(page)),
-                        )
-                        .child(
-                            col()
-                                .gap(1.0)
-                                .child(
-                                    text("PlicZip")
-                                        .font(TextStyle::new(16.0, 650.0))
-                                        .color(kit.c.text_base),
-                                )
-                                .child(
-                                    text("АРХИВНАЯ СТУДИЯ · ФОРМАТ .PLZ")
-                                        .font(kit.ty.small)
-                                        .color(kit.c.text_muted),
-                                ),
-                        ),
-                )
-                .child(
-                    col()
-                        .key("main-header")
-                        .w_full()
-                        .gap(8.0)
-                        .child(
-                            col()
-                                .gap(3.0)
-                                .child(
-                                    text("Библиотека архивов")
-                                        .font(TextStyle::new(25.0, 650.0))
-                                        .color(kit.c.text_base),
-                                )
-                                .child(
-                                    text("Управляйте содержимым PlicZip в одном месте")
-                                        .font(kit.ty.small)
-                                        .color(kit.c.text_muted),
-                                ),
-                        )
-                        .child(
-                            col()
-                                .gap(5.0)
-                                .child(
-                                    text("ЦВЕТОВОЙ АКЦЕНТ")
-                                        .font(kit.ty.small)
-                                        .color(kit.c.text_muted),
-                                )
-                                .child(accent_controls),
-                        ),
-                )
-                .child(source_card)
-                .child(metrics)
-                .child(extract_card)
-                .child(library_card)
-                .child(footer),
-        )
+        .pixels(grain_texture(state.theme_mode))
+        .child(main_content)
+        .children(settings_overlay)
 }
 
 fn main() {
@@ -896,7 +1579,9 @@ fn main() {
     spec.min_size = Some((700.0, 760.0));
     spec.fonts = GUI_FONTS;
     spec.families = ("Intro", "ui-monospace");
-    rune::run(spec);
+    let app = rune::App::new(spec);
+    let _ = APP_HANDLE.set(app.handle());
+    app.run();
 }
 
 #[cfg(test)]
