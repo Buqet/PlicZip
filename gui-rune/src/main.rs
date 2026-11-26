@@ -224,6 +224,7 @@ enum EntryKind {
 struct State {
     entries: Vec<ArchiveEntry>,
     visible: Vec<usize>,
+    order: Option<Vec<usize>>,
     table: TableState,
     accent: Accent,
     theme_mode: ThemeMode,
@@ -250,6 +251,7 @@ impl Default for State {
         Self {
             entries: Vec::new(),
             visible: Vec::new(),
+            order: None,
             table: TableState::new().multi_select(true),
             accent: Accent::Blue,
             theme_mode: ThemeMode::Dark,
@@ -361,15 +363,21 @@ impl State {
 
     fn refresh_visible(&mut self) {
         let query = self.filter_input.text.trim().to_lowercase();
-        self.visible = self
-            .entries
-            .iter()
-            .enumerate()
-            .filter(|(_, entry)| {
-                query.is_empty() || entry.name.to_lowercase().contains(query.as_str())
-            })
-            .map(|(index, _)| index)
-            .collect();
+        self.visible.clear();
+        if let Some(order) = &self.order {
+            for &index in order {
+                let entry = &self.entries[index];
+                if query.is_empty() || entry.name.to_lowercase().contains(query.as_str()) {
+                    self.visible.push(index);
+                }
+            }
+        } else {
+            for (index, entry) in self.entries.iter().enumerate() {
+                if query.is_empty() || entry.name.to_lowercase().contains(query.as_str()) {
+                    self.visible.push(index);
+                }
+            }
+        }
     }
 
     fn open_archive(&mut self, path: PathBuf) {
@@ -408,6 +416,7 @@ impl State {
             Ok((entries, encrypted)) => {
                 let count = entries.len();
                 self.entries = entries;
+                self.order = None;
                 self.filter_input = TextEdit::new("");
                 self.output_input =
                     TextEdit::new(suggested_output_path(&path).display().to_string());
@@ -467,18 +476,23 @@ fn extract_archive(
 }
 
 fn sort_entries(state: &mut State, column: &str, direction: SortDir) {
-    let compare = |left: &ArchiveEntry, right: &ArchiveEntry| match column {
-        "name" => rune_kit::natural_cmp(&left.name, &right.name),
-        "type" => kind_name(left.kind).cmp(kind_name(right.kind)),
-        "size" => left.size.cmp(&right.size),
-        // Protection is an archive-level property, so every row has the same value.
-        "encrypted" => std::cmp::Ordering::Equal,
-        _ => std::cmp::Ordering::Equal,
-    };
-
-    state
-        .entries
-        .sort_by(|left, right| direction.apply(compare(left, right)));
+    let entries = &state.entries;
+    let order = state
+        .order
+        .get_or_insert_with(|| (0..entries.len()).collect());
+    order.sort_by(|&left, &right| {
+        let left = &entries[left];
+        let right = &entries[right];
+        let comparison = match column {
+            "name" => rune_kit::natural_cmp(&left.name, &right.name),
+            "type" => kind_name(left.kind).cmp(kind_name(right.kind)),
+            "size" => left.size.cmp(&right.size),
+            // Protection is an archive-level property, so every row has the same value.
+            "encrypted" => std::cmp::Ordering::Equal,
+            _ => std::cmp::Ordering::Equal,
+        };
+        direction.apply(comparison)
+    });
     state.refresh_visible();
 }
 
@@ -1655,5 +1669,54 @@ mod tests {
         assert!(state.status.contains("файлов: 1"));
 
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn sorting_changes_only_indices_and_preserves_filter_order() {
+        let mut state = State::default();
+        state.entries = vec![
+            ArchiveEntry {
+                id: "0".to_owned(),
+                name: "file-10".to_owned(),
+                kind: EntryKind::File,
+                size: 100,
+            },
+            ArchiveEntry {
+                id: "1".to_owned(),
+                name: "file-2".to_owned(),
+                kind: EntryKind::File,
+                size: 10,
+            },
+            ArchiveEntry {
+                id: "2".to_owned(),
+                name: "file-1".to_owned(),
+                kind: EntryKind::File,
+                size: 10,
+            },
+        ];
+        state.refresh_visible();
+
+        sort_entries(&mut state, "size", SortDir::Ascending);
+        assert_eq!(state.order.as_deref(), Some(&[1, 2, 0][..]));
+        assert_eq!(state.visible, vec![1, 2, 0]);
+        assert_eq!(
+            state
+                .entries
+                .iter()
+                .map(|entry| entry.id.as_str())
+                .collect::<Vec<_>>(),
+            ["0", "1", "2"]
+        );
+
+        state.filter_input = TextEdit::new("file-1");
+        state.refresh_visible();
+        assert_eq!(state.visible, vec![2, 0]);
+        state.filter_input = TextEdit::new("");
+        state.refresh_visible();
+        assert_eq!(state.visible, vec![1, 2, 0]);
+
+        sort_entries(&mut state, "name", SortDir::Ascending);
+        assert_eq!(state.order.as_deref(), Some(&[2, 1, 0][..]));
+        assert_eq!(state.entries[0].id, "0");
     }
 }
